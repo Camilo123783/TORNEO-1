@@ -8,7 +8,7 @@ import SecretAdminModal from './components/SecretAdminModal';
 import EditMatchModal from './components/EditMatchModal';
 import { INITIAL_TEAMS, INITIAL_MATCHES } from './data/initialData';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
-import { Lock, Trophy, RefreshCw } from 'lucide-react';
+import { Lock, Trophy, RefreshCw, ShieldAlert, X } from 'lucide-react';
 
 export default function App() {
   const isConnected = isSupabaseConfigured();
@@ -25,6 +25,8 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('groups'); // 'groups', 'matches', 'playoffs', 'admin'
+  
+  // Unlimited permanent admin session: never expires until user clicks exit
   const [isAdmin, setIsAdmin] = useState(() => {
     return localStorage.getItem('torneo_admin_logged') === 'true';
   });
@@ -69,11 +71,6 @@ export default function App() {
 
         if (!matchesErr && matchesData && matchesData.length > 0) {
           setMatches(matchesData);
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session) {
-          setIsAdmin(true);
         }
       } catch (err) {
         console.error('Error al sincronizar datos:', err);
@@ -123,7 +120,7 @@ export default function App() {
 
         if (error) throw error;
       } catch (err) {
-        console.error('Error al guardar partido:', err);
+        console.error('Error al guardar partido en Supabase:', err);
       }
     }
   };
@@ -163,7 +160,7 @@ export default function App() {
     }
   };
 
-  // Handle Login Success
+  // Handle Login Success (Unlimited permanent session)
   const handleLoginSuccess = () => {
     setIsAdmin(true);
     localStorage.setItem('torneo_admin_logged', 'true');
@@ -171,24 +168,38 @@ export default function App() {
   };
 
   // Handle Logout
-  const handleLogout = async () => {
+  const handleLogout = () => {
     setIsAdmin(false);
     localStorage.removeItem('torneo_admin_logged');
-    if (isConnected && supabase) {
-      await supabase.auth.signOut();
-    }
     setActiveTab('groups');
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#080d1a] text-slate-100 selection:bg-emerald-500 selection:text-black">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800 selection:bg-emerald-500 selection:text-white">
       
+      {/* High-Visibility Admin Banner (Imposible de confundir) */}
+      {isAdmin && (
+        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-4 shadow-sm flex items-center justify-between sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <span className="p-1 bg-white/20 rounded">⚡</span>
+            <span>MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores y clasificados</span>
+          </div>
+          <button 
+            onClick={handleLogout}
+            className="bg-black/20 hover:bg-black/35 text-white text-xs font-bold px-3 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+          >
+            <span>Salir de Admin</span>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isAdmin={isAdmin}
-        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onOpenLogin={() => setIsLoginModalOpen(false || true)}
         onLogout={handleLogout}
       />
 
@@ -197,9 +208,9 @@ export default function App() {
         
         {/* Syncing spinner */}
         {syncing && (
-          <div className="mb-4 flex items-center justify-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 py-1.5 px-4 rounded-full w-fit mx-auto animate-pulse">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            <span>Actualizando torneo...</span>
+          <div className="mb-4 flex items-center justify-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 py-1.5 px-4 rounded-full w-fit mx-auto animate-pulse font-medium">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+            <span>Actualizando datos del torneo...</span>
           </div>
         )}
 
@@ -258,17 +269,16 @@ export default function App() {
       />
 
       {/* Footer with Discreet Admin Secret Entry */}
-      <footer className="mt-auto border-t border-slate-900 bg-[#060a14] py-8 text-xs text-slate-500">
+      <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-emerald-500/70" />
-            <span className="font-semibold text-slate-400">Torneo de Microfútbol 2026</span>
+            <Trophy className="w-4 h-4 text-emerald-600" />
+            <span className="font-bold text-slate-700">Torneo de Microfútbol 2026</span>
             <span>•</span>
             <span>12 Equipos en 4 Grupos</span>
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Secret Admin Button in Footer */}
             <button
               onClick={() => {
                 if (isAdmin) {
@@ -278,7 +288,7 @@ export default function App() {
                 }
               }}
               title="Acceso confidencial (Ctrl+Shift+A)"
-              className="flex items-center gap-1.5 opacity-20 hover:opacity-80 transition-all hover:text-emerald-400 p-1.5 rounded cursor-pointer"
+              className="flex items-center gap-1.5 opacity-20 hover:opacity-100 transition-all hover:text-emerald-700 p-1.5 rounded cursor-pointer"
             >
               <Lock className="w-3.5 h-3.5" />
               <span className="text-[11px]">{isAdmin ? 'Panel' : 'Acceso'}</span>

@@ -1,6 +1,6 @@
 -- =========================================================
 -- TORNEO DE MICROFÚTBOL 2026 - ESQUEMA Y DATOS INICIALES
--- (Versión idempotente: puedes ejecutarlo cuantas veces quieras sin errores)
+-- (Versión con acceso por Código/Clave: permite edición autorizada por frontend)
 -- =========================================================
 
 -- 1. TABLA DE EQUIPOS
@@ -36,22 +36,24 @@ CREATE TABLE IF NOT EXISTS matches (
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
 
--- 4. ELIMINAR POLÍTICAS PREVIAS SI YA EXISTEN (Evita error 42710)
+-- 4. ELIMINAR POLÍTICAS PREVIAS SI YA EXISTEN
 DROP POLICY IF EXISTS "Public read teams" ON teams;
 DROP POLICY IF EXISTS "Public read matches" ON matches;
 DROP POLICY IF EXISTS "Auth write teams" ON teams;
 DROP POLICY IF EXISTS "Auth write matches" ON matches;
 DROP POLICY IF EXISTS "Auth modify teams" ON teams;
 DROP POLICY IF EXISTS "Auth modify matches" ON matches;
+DROP POLICY IF EXISTS "Public write teams" ON teams;
+DROP POLICY IF EXISTS "Public write matches" ON matches;
 
 -- 5. CREAR POLÍTICAS DE ACCESO
 -- Todo el público puede consultar resultados y tablas (SELECT)
 CREATE POLICY "Public read teams" ON teams FOR SELECT USING (true);
 CREATE POLICY "Public read matches" ON matches FOR SELECT USING (true);
 
--- Solo administradores autenticados pueden insertar, actualizar o borrar
-CREATE POLICY "Auth write teams" ON teams FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Auth write matches" ON matches FOR ALL USING (auth.role() = 'authenticated');
+-- Permite actualizar partidos y equipos desde el frontend (protegido por Código y Clave en la app)
+CREATE POLICY "Public write teams" ON teams FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public write matches" ON matches FOR ALL USING (true) WITH CHECK (true);
 
 -- 6. INSERTAR LOS 12 EQUIPOS (4 Grupos de 3)
 INSERT INTO teams (id, name, "group", logo, color) VALUES
