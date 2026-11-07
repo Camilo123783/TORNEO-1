@@ -13,7 +13,7 @@ import {
   Plus,
   Minus
 } from 'lucide-react';
-import { calculateGroupStandings } from '../tournamentData';
+import { calculateGroupStandings, isGroupCompleted, getResolvedPlayoffMatch } from '../tournamentData';
 
 export default function AdminPanel({ 
   teams, 
@@ -22,18 +22,22 @@ export default function AdminPanel({
   onEditMatch, 
   onEditTeam,
   onResetTournament,
-  onSaveSingleMatch
+  onSaveSingleMatch,
+  adminCedula = '7530',
+  adminPassword = '1590',
+  onUpdateCredentials
 }) {
   const [activeAdminTab, setActiveAdminTab] = useState('matches'); // 'matches', 'teams', 'settings'
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Custom credentials state (Cédula 7530, Clave 1590)
-  const [customCedula, setCustomCedula] = useState(
-    localStorage.getItem('torneo_admin_cedula') || '7530'
-  );
-  const [customPass, setCustomPass] = useState(
-    localStorage.getItem('torneo_admin_password') || '1590'
-  );
+  // Custom credentials state (Cédula 7530, Clave 1590 sincronizadas en Supabase)
+  const [customCedula, setCustomCedula] = useState(adminCedula);
+  const [customPass, setCustomPass] = useState(adminPassword);
+
+  React.useEffect(() => {
+    setCustomCedula(adminCedula);
+    setCustomPass(adminPassword);
+  }, [adminCedula, adminPassword]);
 
   // Quick stats
   const totalMatches = matches.length;
@@ -54,55 +58,26 @@ export default function AdminPanel({
       alert('La cédula y la contraseña no pueden estar vacías.');
       return;
     }
-    localStorage.setItem('torneo_admin_cedula', customCedula.trim());
-    localStorage.setItem('torneo_admin_password', customPass.trim());
-    showNotification('¡Cédula y contraseña de administrador actualizadas correctamente!');
+    if (onUpdateCredentials) {
+      onUpdateCredentials(customCedula.trim(), customPass.trim());
+    }
+    showNotification('¡Cédula y contraseña de administrador actualizadas en Supabase!');
   };
 
-  // Automatic propagation of Group Stage 1st & 2nd places into Quarterfinals (QF1..QF4)
+  // Automatic propagation notice
   const handleAutoSeedQuarterfinals = () => {
-    const standingsA = calculateGroupStandings(teams, matches, 'A');
-    const standingsB = calculateGroupStandings(teams, matches, 'B');
-    const standingsC = calculateGroupStandings(teams, matches, 'C');
-    const standingsD = calculateGroupStandings(teams, matches, 'D');
-
-    if (!standingsA[0] || !standingsB[1] || !standingsC[0] || !standingsD[1]) {
-      alert('Asegúrate de que haya equipos registrados en todos los grupos.');
-      return;
+    const allCompleted = ['A', 'B', 'C', 'D'].every(grp => isGroupCompleted(matches, grp));
+    if (!allCompleted) {
+      showNotification('ℹ️ Clasificación automática activa: Cada grupo avanzará a Cuartos inmediatamente al completar sus 3 partidos.');
+    } else {
+      showNotification('✅ ¡Todos los grupos han completado sus 3 partidos y los clasificados ya están en Cuartos de Final!');
     }
-
-    const firstA = standingsA[0]?.team.id;
-    const secondA = standingsA[1]?.team.id;
-
-    const firstB = standingsB[0]?.team.id;
-    const secondB = standingsB[1]?.team.id;
-
-    const firstC = standingsC[0]?.team.id;
-    const secondC = standingsC[1]?.team.id;
-
-    const firstD = standingsD[0]?.team.id;
-    const secondD = standingsD[1]?.team.id;
-
-    const updatedMatches = matches.map((m) => {
-      if (m.bracket_code === 'QF1') return { ...m, home_team_id: firstA, away_team_id: secondB };
-      if (m.bracket_code === 'QF2') return { ...m, home_team_id: firstC, away_team_id: secondD };
-      if (m.bracket_code === 'QF3') return { ...m, home_team_id: firstB, away_team_id: secondA };
-      if (m.bracket_code === 'QF4') return { ...m, home_team_id: firstD, away_team_id: secondC };
-      return m;
-    });
-
-    setMatches(updatedMatches);
-    if (onSaveSingleMatch) {
-      updatedMatches
-        .filter((m) => m.bracket_code?.startsWith('QF'))
-        .forEach((m) => onSaveSingleMatch(m));
-    }
-    showNotification('¡Cuartos de final asignados automáticamente según las posiciones de la fase de grupos!');
   };
 
   // Quick score updater
   const handleQuickScoreChange = (matchId, teamType, delta) => {
     let updatedMatch = null;
+    const now = Date.now();
     const updated = matches.map((m) => {
       if (m.id === matchId) {
         let currentHome = m.home_score !== null ? m.home_score : 0;
@@ -119,6 +94,7 @@ export default function AdminPanel({
           home_score: currentHome,
           away_score: currentAway,
           status: m.status === 'scheduled' ? 'live' : m.status,
+          local_updated_at: now,
         };
         return updatedMatch;
       }
@@ -134,6 +110,7 @@ export default function AdminPanel({
   // Direct status updater
   const handleStatusChange = (matchId, newStatus) => {
     let updatedMatch = null;
+    const now = Date.now();
     const updated = matches.map((m) => {
       if (m.id === matchId) {
         updatedMatch = {
@@ -141,6 +118,7 @@ export default function AdminPanel({
           status: newStatus,
           home_score: m.home_score !== null ? m.home_score : 0,
           away_score: m.away_score !== null ? m.away_score : 0,
+          local_updated_at: now,
         };
         return updatedMatch;
       }
@@ -265,9 +243,10 @@ export default function AdminPanel({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {matches.map((m) => {
-              const home = m.home_team_id ? getTeam(m.home_team_id) : null;
-              const away = m.away_team_id ? getTeam(m.away_team_id) : null;
+            {matches.map((rawM) => {
+              const m = rawM.phase === 'playoffs' ? getResolvedPlayoffMatch(rawM, teams, matches) : rawM;
+              const home = m.resolvedHomeTeam || (m.home_team_id ? getTeam(m.home_team_id) : null);
+              const away = m.resolvedAwayTeam || (m.away_team_id ? getTeam(m.away_team_id) : null);
 
               return (
                 <div

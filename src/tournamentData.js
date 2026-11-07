@@ -115,6 +115,173 @@ export function calculateGroupStandings(teams, matches, groupKey) {
 }
 
 // ==========================================
+// PLAYOFFS & QUALIFICATION HELPERS
+// (Solo clasifican cuando se completan los 3 PJ del grupo)
+// ==========================================
+export function isGroupCompleted(matches, groupKey) {
+  const grpMatches = matches.filter(m => m.phase === 'groups' && m.group === groupKey);
+  return grpMatches.length === 3 && grpMatches.every(m => m.status === 'finished');
+}
+
+export function getGroupStatus(matches, groupKey) {
+  const grpMatches = matches.filter(m => m.phase === 'groups' && m.group === groupKey);
+  const finishedCount = grpMatches.filter(m => m.status === 'finished').length;
+  return {
+    total: 3,
+    finished: finishedCount,
+    isCompleted: grpMatches.length === 3 && finishedCount === 3
+  };
+}
+
+export function getResolvedPlayoffMatches(matches, teams) {
+  const getTeam = (id) => teams.find((t) => t.id === id) || null;
+
+  // Top 2 de cada grupo ÚNICAMENTE cuando se hayan finalizado los 3 partidos del grupo
+  const getTop2IfCompleted = (grp) => {
+    if (!isGroupCompleted(matches, grp)) return { first: null, second: null };
+    const standings = calculateGroupStandings(teams, matches, grp);
+    return {
+      first: standings[0]?.team || null,
+      second: standings[1]?.team || null,
+    };
+  };
+
+  const topA = getTop2IfCompleted('A');
+  const topB = getTop2IfCompleted('B');
+  const topC = getTop2IfCompleted('C');
+  const topD = getTop2IfCompleted('D');
+
+  const playoffMap = {};
+  matches
+    .filter((m) => m.phase === 'playoffs')
+    .forEach((m) => {
+      playoffMap[m.bracket_code] = { ...m };
+    });
+
+  // 1. Cuartos de Final (QF1..QF4)
+  // QF1: 1A vs 2B
+  if (playoffMap['QF1']) {
+    const m = playoffMap['QF1'];
+    m.home_team_id = topA.first ? topA.first.id : null;
+    m.away_team_id = topB.second ? topB.second.id : null;
+    m.resolvedHomeTeam = topA.first;
+    m.resolvedAwayTeam = topB.second;
+    m.home_label = topA.first ? topA.first.name : '1º Grupo A (Pendiente)';
+    m.away_label = topB.second ? topB.second.name : '2º Grupo B (Pendiente)';
+  }
+
+  // QF2: 1C vs 2D
+  if (playoffMap['QF2']) {
+    const m = playoffMap['QF2'];
+    m.home_team_id = topC.first ? topC.first.id : null;
+    m.away_team_id = topD.second ? topD.second.id : null;
+    m.resolvedHomeTeam = topC.first;
+    m.resolvedAwayTeam = topD.second;
+    m.home_label = topC.first ? topC.first.name : '1º Grupo C (Pendiente)';
+    m.away_label = topD.second ? topD.second.name : '2º Grupo D (Pendiente)';
+  }
+
+  // QF3: 1B vs 2A
+  if (playoffMap['QF3']) {
+    const m = playoffMap['QF3'];
+    m.home_team_id = topB.first ? topB.first.id : null;
+    m.away_team_id = topA.second ? topA.second.id : null;
+    m.resolvedHomeTeam = topB.first;
+    m.resolvedAwayTeam = topA.second;
+    m.home_label = topB.first ? topB.first.name : '1º Grupo B (Pendiente)';
+    m.away_label = topA.second ? topA.second.name : '2º Grupo A (Pendiente)';
+  }
+
+  // QF4: 1D vs 2C
+  if (playoffMap['QF4']) {
+    const m = playoffMap['QF4'];
+    m.home_team_id = topD.first ? topD.first.id : null;
+    m.away_team_id = topC.second ? topC.second.id : null;
+    m.resolvedHomeTeam = topD.first;
+    m.resolvedAwayTeam = topC.second;
+    m.home_label = topD.first ? topD.first.name : '1º Grupo D (Pendiente)';
+    m.away_label = topC.second ? topC.second.name : '2º Grupo C (Pendiente)';
+  }
+
+  const getWinner = (bracketCode) => {
+    const m = playoffMap[bracketCode];
+    if (!m || m.status !== 'finished' || m.home_score === null || m.away_score === null) return null;
+    if (m.home_score > m.away_score) return m.resolvedHomeTeam || getTeam(m.home_team_id);
+    if (m.away_score > m.home_score) return m.resolvedAwayTeam || getTeam(m.away_team_id);
+    return null;
+  };
+
+  const getLoser = (bracketCode) => {
+    const m = playoffMap[bracketCode];
+    if (!m || m.status !== 'finished' || m.home_score === null || m.away_score === null) return null;
+    if (m.home_score < m.away_score) return m.resolvedHomeTeam || getTeam(m.home_team_id);
+    if (m.away_score < m.home_score) return m.resolvedAwayTeam || getTeam(m.away_team_id);
+    return null;
+  };
+
+  // 2. Semifinales (SF1, SF2)
+  // SF1: Ganador QF1 vs Ganador QF2
+  const wQF1 = getWinner('QF1');
+  const wQF2 = getWinner('QF2');
+  if (playoffMap['SF1']) {
+    const m = playoffMap['SF1'];
+    m.home_team_id = wQF1 ? wQF1.id : null;
+    m.away_team_id = wQF2 ? wQF2.id : null;
+    m.resolvedHomeTeam = wQF1;
+    m.resolvedAwayTeam = wQF2;
+    m.home_label = wQF1 ? wQF1.name : 'Ganador Cuartos 1';
+    m.away_label = wQF2 ? wQF2.name : 'Ganador Cuartos 2';
+  }
+
+  // SF2: Ganador QF3 vs Ganador QF4
+  const wQF3 = getWinner('QF3');
+  const wQF4 = getWinner('QF4');
+  if (playoffMap['SF2']) {
+    const m = playoffMap['SF2'];
+    m.home_team_id = wQF3 ? wQF3.id : null;
+    m.away_team_id = wQF4 ? wQF4.id : null;
+    m.resolvedHomeTeam = wQF3;
+    m.resolvedAwayTeam = wQF4;
+    m.home_label = wQF3 ? wQF3.name : 'Ganador Cuartos 3';
+    m.away_label = wQF4 ? wQF4.name : 'Ganador Cuartos 4';
+  }
+
+  // 3. Final y 3er Puesto
+  const wSF1 = getWinner('SF1');
+  const wSF2 = getWinner('SF2');
+  const lSF1 = getLoser('SF1');
+  const lSF2 = getLoser('SF2');
+
+  if (playoffMap['FINAL']) {
+    const m = playoffMap['FINAL'];
+    m.home_team_id = wSF1 ? wSF1.id : null;
+    m.away_team_id = wSF2 ? wSF2.id : null;
+    m.resolvedHomeTeam = wSF1;
+    m.resolvedAwayTeam = wSF2;
+    m.home_label = wSF1 ? wSF1.name : 'Ganador Semifinal 1';
+    m.away_label = wSF2 ? wSF2.name : 'Ganador Semifinal 2';
+  }
+
+  if (playoffMap['3RD']) {
+    const m = playoffMap['3RD'];
+    m.home_team_id = lSF1 ? lSF1.id : null;
+    m.away_team_id = lSF2 ? lSF2.id : null;
+    m.resolvedHomeTeam = lSF1;
+    m.resolvedAwayTeam = lSF2;
+    m.home_label = lSF1 ? lSF1.name : 'Perdedor Semifinal 1';
+    m.away_label = lSF2 ? lSF2.name : 'Perdedor Semifinal 2';
+  }
+
+  return playoffMap;
+}
+
+export function getResolvedPlayoffMatch(match, teams, matches) {
+  if (!match || match.phase !== 'playoffs') return match;
+  const playoffMap = getResolvedPlayoffMatches(matches, teams);
+  return playoffMap[match.bracket_code] || match;
+}
+
+// ==========================================
 // 12 TEAMS (4 GROUPS OF 3, 5-12 PLAYERS)
 // ==========================================
 export const INITIAL_TEAMS = [
@@ -310,8 +477,7 @@ export const INITIAL_MATCHES = [
     home_score: 4,
     away_score: 2,
     status: 'finished',
-    date: '2026-11-10 18:00',
-    court: 'Cancha 1 - Principal'
+    date: '2026-11-10 18:00'
   },
   {
     id: 'm-a2',
@@ -323,8 +489,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-12 18:00',
-    court: 'Cancha 1 - Principal'
+    date: '2026-11-12 18:00'
   },
   {
     id: 'm-a3',
@@ -336,8 +501,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-14 18:00',
-    court: 'Cancha 1 - Principal'
+    date: '2026-11-14 18:00'
   },
 
   // GRUPO B
@@ -351,8 +515,7 @@ export const INITIAL_MATCHES = [
     home_score: 3,
     away_score: 3,
     status: 'finished',
-    date: '2026-11-10 19:00',
-    court: 'Cancha 1 - Principal'
+    date: '2026-11-10 19:00'
   },
   {
     id: 'm-b2',
@@ -364,8 +527,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-12 19:00',
-    court: 'Cancha 1 - Principal'
+    date: '2026-11-12 19:00'
   },
   {
     id: 'm-b3',
@@ -377,8 +539,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-14 19:00',
-    court: 'Cancha 1 - Principal'
+    date: '2026-11-14 19:00'
   },
 
   // GRUPO C
@@ -392,8 +553,7 @@ export const INITIAL_MATCHES = [
     home_score: 5,
     away_score: 1,
     status: 'finished',
-    date: '2026-11-11 18:00',
-    court: 'Cancha 2'
+    date: '2026-11-11 18:00'
   },
   {
     id: 'm-c2',
@@ -405,8 +565,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-13 18:00',
-    court: 'Cancha 2'
+    date: '2026-11-13 18:00'
   },
   {
     id: 'm-c3',
@@ -418,8 +577,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-15 18:00',
-    court: 'Cancha 2'
+    date: '2026-11-15 18:00'
   },
 
   // GRUPO D
@@ -433,8 +591,7 @@ export const INITIAL_MATCHES = [
     home_score: 2,
     away_score: 4,
     status: 'finished',
-    date: '2026-11-11 19:00',
-    court: 'Cancha 2'
+    date: '2026-11-11 19:00'
   },
   {
     id: 'm-d2',
@@ -446,8 +603,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-13 19:00',
-    court: 'Cancha 2'
+    date: '2026-11-13 19:00'
   },
   {
     id: 'm-d3',
@@ -459,8 +615,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-15 19:00',
-    court: 'Cancha 2'
+    date: '2026-11-15 19:00'
   },
 
   // CUARTOS DE FINAL
@@ -476,8 +631,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-17 18:00',
-    court: 'Cancha Principal'
+    date: '2026-11-17 18:00'
   },
   {
     id: 'qf-2',
@@ -491,8 +645,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-17 19:15',
-    court: 'Cancha Principal'
+    date: '2026-11-17 19:15'
   },
   {
     id: 'qf-3',
@@ -506,8 +659,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-18 18:00',
-    court: 'Cancha Principal'
+    date: '2026-11-18 18:00'
   },
   {
     id: 'qf-4',
@@ -521,8 +673,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-18 19:15',
-    court: 'Cancha Principal'
+    date: '2026-11-18 19:15'
   },
 
   // SEMIFINALES
@@ -538,8 +689,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-20 18:30',
-    court: 'Cancha Principal'
+    date: '2026-11-20 18:30'
   },
   {
     id: 'sf-2',
@@ -553,8 +703,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-20 19:45',
-    court: 'Cancha Principal'
+    date: '2026-11-20 19:45'
   },
 
   // 3ER PUESTO
@@ -570,8 +719,7 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-22 17:30',
-    court: 'Cancha Principal'
+    date: '2026-11-22 17:30'
   },
 
   // GRAN FINAL
@@ -587,7 +735,6 @@ export const INITIAL_MATCHES = [
     home_score: null,
     away_score: null,
     status: 'scheduled',
-    date: '2026-11-22 19:00',
-    court: 'Cancha Principal'
+    date: '2026-11-22 19:00'
   },
 ];

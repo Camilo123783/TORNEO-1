@@ -24,19 +24,25 @@ import { Lock, Trophy, RefreshCw, X } from 'lucide-react';
 export default function App() {
   const isConnected = isSupabaseConfigured();
 
-  // State: Teams and Matches (Loaded from localStorage or defaults)
-  const [teams, setTeams] = useState(() => {
-    const saved = localStorage.getItem('torneo_microfutbol_teams');
-    return saved ? JSON.parse(saved) : INITIAL_TEAMS;
-  });
-
-  const [matches, setMatches] = useState(() => {
-    const saved = localStorage.getItem('torneo_microfutbol_matches');
-    return saved ? JSON.parse(saved) : INITIAL_MATCHES;
-  });
+  // State: Teams, Matches y Credenciales (Manejados 100% en Supabase sin localStorage)
+  const [teams, setTeams] = useState(INITIAL_TEAMS);
+  const [matches, setMatches] = useState(INITIAL_MATCHES);
+  const [adminCedula, setAdminCedula] = useState('7530');
+  const [adminPassword, setAdminPassword] = useState('1590');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Navigation tab: 'groups', 'matches', 'playoffs', 'teams', 'scorers', 'admin'
-  const [activeTab, setActiveTab] = useState('groups');
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('torneo_active_tab');
+    const isLogged = localStorage.getItem('torneo_admin_logged') === 'true';
+    if (saved === 'admin' && !isLogged) return 'groups';
+    if (saved) return saved;
+    return isLogged ? 'admin' : 'groups';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('torneo_active_tab', activeTab);
+  }, [activeTab]);
   
   // Permanent unlimited admin session
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -64,101 +70,94 @@ export default function App() {
   const [editingTeam, setEditingTeam] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Sync to local storage always as instant cache
+  // Limpieza inicial de cualquier rastro previo en localStorage
   useEffect(() => {
-    localStorage.setItem('torneo_microfutbol_teams', JSON.stringify(teams));
-  }, [teams]);
+    try {
+      localStorage.removeItem('torneo_microfutbol_teams');
+      localStorage.removeItem('torneo_microfutbol_matches');
+    } catch (e) {}
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('torneo_microfutbol_matches', JSON.stringify(matches));
-  }, [matches]);
-
-  const lastLocalEditRef = useRef(0);
-
-  // Fast fetch data function (used for initial load, polling, and manual refresh)
+  // Fetch data function directo desde tablas de Supabase
   const fetchData = useCallback(async (showLoading = false) => {
-    if (!isConnected || !supabase) return;
-
-    // Do not overwrite local edits if the user made changes within the last 6 seconds
-    if (!showLoading && Date.now() - lastLocalEditRef.current < 6000) {
+    if (!isConnected || !supabase) {
+      setIsLoading(false);
       return;
     }
 
     if (showLoading) setIsRefreshing(true);
     try {
-      // 1. Fetch Teams
+      // 1. Cargar Equipos y Plantillas directamente de Supabase
       const { data: teamsData, error: teamsErr } = await supabase
         .from('teams')
         .select('*')
-        .order('name');
+        .order('id');
       
       if (!teamsErr && teamsData && teamsData.length > 0) {
-        setTeams((prevTeams) => {
-          // Merge Supabase data with local players if players column isn't in DB yet
-          return teamsData.map((remote) => {
-            const local = prevTeams.find((t) => t.id === remote.id);
-            return {
-              ...remote,
-              players: remote.players || (local ? local.players : [])
-            };
-          });
-        });
+        setTeams(teamsData.map((remote) => {
+          const fallbackTeam = INITIAL_TEAMS.find((t) => t.id === remote.id);
+          return {
+            ...remote,
+            players: Array.isArray(remote.players) && remote.players.length > 0
+              ? remote.players 
+              : (fallbackTeam ? fallbackTeam.players : [])
+          };
+        }));
       }
 
-      // 2. Fetch Matches
+      // 2. Cargar Partidos y Resultados directamente de Supabase
       const { data: matchesData, error: matchesErr } = await supabase
         .from('matches')
         .select('*')
         .order('date');
 
       if (!matchesErr && matchesData && matchesData.length > 0) {
-        setMatches((prevMatches) => {
-          return prevMatches.map((local) => {
-            const remote = matchesData.find((m) => m.id === local.id);
-            if (!remote) return local;
-
-            // If a recent local change occurred and Supabase has not yet updated (e.g. pending RLS policy), keep local
-            if (Date.now() - lastLocalEditRef.current < 120000 && local.status !== remote.status) {
-              return local;
-            }
-            return {
-              ...local,
-              ...remote,
-              // If local score was recently modified, don't revert to null or stale
-              home_score: local.home_score !== null && remote.home_score === null ? local.home_score : remote.home_score,
-              away_score: local.away_score !== null && remote.away_score === null ? local.away_score : remote.away_score,
-            };
-          });
-        });
+        setMatches(matchesData);
       }
+
+      // 3. Cargar Credenciales de Administración desde tabla tournament_settings
+      try {
+        const { data: settingsData } = await supabase
+          .from('tournament_settings')
+          .select('*');
+        if (settingsData && settingsData.length > 0) {
+          const c = settingsData.find((s) => s.key === 'admin_cedula');
+          const p = settingsData.find((s) => s.key === 'admin_password');
+          if (c?.value) setAdminCedula(c.value);
+          if (p?.value) setAdminPassword(p.value);
+        }
+      } catch (e) {}
     } catch (err) {
-      console.error('Error al sincronizar datos:', err);
+      console.error('Error al sincronizar datos desde Supabase:', err);
     } finally {
+      setIsLoading(false);
       if (showLoading) {
         setTimeout(() => setIsRefreshing(false), 300);
       }
     }
   }, [isConnected]);
 
-  // Initial load
+  // Initial load y suscripción en tiempo real de Supabase
   useEffect(() => {
     fetchData();
 
-    // Fast background polling every 4 seconds to guarantee all devices update in real-time
+    // Background polling cada 4 segundos como seguro adicional de sincronización
     const interval = setInterval(() => {
       fetchData(false);
     }, 4000);
 
-    // Supabase Realtime subscription
-    let matchesSubscription = null;
+    // Supabase Realtime subscription a nivel de base de datos
+    let realtimeChannel = null;
     if (isConnected && supabase) {
-      matchesSubscription = supabase
-        .channel('realtime_channel')
+      realtimeChannel = supabase
+        .channel('db_sync_channel')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, (payload) => {
           if (payload.eventType === 'UPDATE') {
             setMatches((prev) => prev.map((m) => (m.id === payload.new.id ? payload.new : m)));
           } else if (payload.eventType === 'INSERT') {
             setMatches((prev) => [...prev, payload.new]);
+          } else if (payload.eventType === 'DELETE') {
+            setMatches((prev) => prev.filter((m) => m.id !== payload.old.id));
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, (payload) => {
@@ -166,21 +165,25 @@ export default function App() {
             setTeams((prev) => prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)));
           }
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_settings' }, (payload) => {
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            if (payload.new.key === 'admin_cedula') setAdminCedula(payload.new.value);
+            if (payload.new.key === 'admin_password') setAdminPassword(payload.new.value);
+          }
+        })
         .subscribe();
     }
 
     return () => {
       clearInterval(interval);
-      if (matchesSubscription && supabase) {
-        supabase.removeChannel(matchesSubscription);
+      if (realtimeChannel && supabase) {
+        supabase.removeChannel(realtimeChannel);
       }
     };
   }, [isConnected, fetchData]);
 
-  // Handle Save Single Match (0ms optimistic state update + Supabase sync)
+  // Guardar partido directamente en la tabla 'matches' de Supabase
   const handleSaveMatch = async (updatedMatch) => {
-    lastLocalEditRef.current = Date.now();
-
     const cleanMatch = {
       ...updatedMatch,
       home_score: updatedMatch.home_score !== '' && updatedMatch.home_score !== null && !isNaN(updatedMatch.home_score)
@@ -191,11 +194,8 @@ export default function App() {
         : null,
     };
 
-    setMatches((prev) => {
-      const next = prev.map((m) => (m.id === cleanMatch.id ? cleanMatch : m));
-      localStorage.setItem('torneo_microfutbol_matches', JSON.stringify(next));
-      return next;
-    });
+    // Actualización inmediata en memoria para experiencia instantánea
+    setMatches((prev) => prev.map((m) => (m.id === cleanMatch.id ? cleanMatch : m)));
 
     if (isConnected && supabase) {
       try {
@@ -214,9 +214,12 @@ export default function App() {
           .select();
 
         if (error) {
-          console.warn('Error al actualizar en Supabase:', error.message);
+          console.error('Error al actualizar en Supabase:', error);
+          alert('Error al guardar en Supabase: ' + error.message);
         } else if (!data || data.length === 0) {
-          console.warn('Supabase no actualizó filas. Es necesario desactivar RLS o dar permisos públicos.');
+          console.warn('Supabase no actualizó filas. Recuerda ejecutar supabase_setup.sql en el SQL Editor para desactivar RLS.');
+        } else {
+          setMatches((prev) => prev.map((m) => (m.id === data[0].id ? data[0] : m)));
         }
       } catch (err) {
         console.error('Error al guardar partido en Supabase:', err);
@@ -224,24 +227,37 @@ export default function App() {
     }
   };
 
-  // Handle Save Team & Players (0ms optimistic state update + resilient Supabase sync)
+  // Guardar equipo y jugadores directamente en la tabla 'teams' de Supabase
   const handleSaveTeam = async (updatedTeam) => {
     setTeams((prev) => prev.map((t) => (t.id === updatedTeam.id ? updatedTeam : t)));
 
     if (isConnected && supabase) {
       try {
-        // Try saving full object including players
-        const { error } = await supabase.from('teams').upsert(updatedTeam);
-        if (error) {
-          // If players column is not in Supabase yet, save without players column to avoid error
-          const cleanTeam = {
-            id: updatedTeam.id,
+        const { error } = await supabase
+          .from('teams')
+          .update({
             name: updatedTeam.name,
             group: updatedTeam.group,
             logo: updatedTeam.logo,
             color: updatedTeam.color,
-          };
-          await supabase.from('teams').upsert(cleanTeam);
+            players: updatedTeam.players || [],
+          })
+          .eq('id', updatedTeam.id);
+
+        if (error) {
+          if (error.code === '42703') {
+            await supabase
+              .from('teams')
+              .update({
+                name: updatedTeam.name,
+                group: updatedTeam.group,
+                logo: updatedTeam.logo,
+                color: updatedTeam.color,
+              })
+              .eq('id', updatedTeam.id);
+          } else {
+            console.error('Error al guardar equipo en Supabase:', error);
+          }
         }
       } catch (err) {
         console.error('Error al guardar equipo en Supabase:', err);
@@ -249,10 +265,11 @@ export default function App() {
     }
   };
 
-  // Update Player Goals directly (e.g. from Goleadores table)
+  // Guardar goles de jugadores directamente en Supabase
   const handleUpdatePlayerGoals = (teamId, playerId, delta) => {
-    setTeams((prev) =>
-      prev.map((team) => {
+    setTeams((prev) => {
+      let updatedTeam = null;
+      const nextTeams = prev.map((team) => {
         if (team.id === teamId) {
           const updatedPlayers = (team.players || []).map((p) => {
             if (p.id === playerId) {
@@ -260,22 +277,42 @@ export default function App() {
             }
             return p;
           });
-          const updatedTeam = { ...team, players: updatedPlayers };
-          // Background sync
-          handleSaveTeam(updatedTeam);
+          updatedTeam = { ...team, players: updatedPlayers };
           return updatedTeam;
         }
         return team;
-      })
-    );
+      });
+
+      if (updatedTeam) {
+        handleSaveTeam(updatedTeam);
+      }
+      return nextTeams;
+    });
   };
 
-  // Reset Tournament
+  // Guardar credenciales de administración en tabla tournament_settings de Supabase
+  const handleUpdateCredentials = async (newCedula, newPass) => {
+    setAdminCedula(newCedula);
+    setAdminPassword(newPass);
+    if (isConnected && supabase) {
+      try {
+        await supabase.from('tournament_settings').upsert([
+          { key: 'admin_cedula', value: newCedula },
+          { key: 'admin_password', value: newPass }
+        ]);
+      } catch (err) {
+        console.error('Error al actualizar credenciales en Supabase:', err);
+      }
+    }
+  };
+
+  // Reiniciar torneo directamente en tablas de Supabase
   const handleResetTournament = async () => {
+    if (!confirm('¿Seguro que deseas reiniciar los marcadores y equipos a su estado original en Supabase?')) {
+      return;
+    }
     setTeams(INITIAL_TEAMS);
     setMatches(INITIAL_MATCHES);
-    localStorage.removeItem('torneo_microfutbol_teams');
-    localStorage.removeItem('torneo_microfutbol_matches');
 
     if (isConnected && supabase) {
       try {
@@ -286,13 +323,29 @@ export default function App() {
             group: t.group,
             logo: t.logo,
             color: t.color,
+            players: t.players,
           });
         }
         for (const m of INITIAL_MATCHES) {
-          await supabase.from('matches').upsert(m);
+          await supabase.from('matches').upsert({
+            id: m.id,
+            round: m.round,
+            phase: m.phase,
+            group: m.group,
+            bracket_code: m.bracket_code,
+            home_label: m.home_label,
+            away_label: m.away_label,
+            home_team_id: m.home_team_id,
+            away_team_id: m.away_team_id,
+            home_score: m.home_score,
+            away_score: m.away_score,
+            status: m.status,
+            date: m.date,
+          });
         }
+        fetchData(true);
       } catch (err) {
-        console.error('Error al reiniciar base de datos:', err);
+        console.error('Error al reiniciar base de datos en Supabase:', err);
       }
     }
   };
@@ -302,12 +355,14 @@ export default function App() {
     setIsAdmin(true);
     localStorage.setItem('torneo_admin_logged', 'true');
     setActiveTab('admin');
+    localStorage.setItem('torneo_active_tab', 'admin');
   };
 
   const handleLogout = () => {
     setIsAdmin(false);
     localStorage.removeItem('torneo_admin_logged');
     setActiveTab('groups');
+    localStorage.setItem('torneo_active_tab', 'groups');
   };
 
   return (
@@ -400,6 +455,9 @@ export default function App() {
             onEditMatch={(m) => setEditingMatch(m)}
             onEditTeam={(team) => setEditingTeam(team)}
             onResetTournament={handleResetTournament}
+            adminCedula={adminCedula}
+            adminPassword={adminPassword}
+            onUpdateCredentials={handleUpdateCredentials}
           />
         )}
       </main>
@@ -409,6 +467,8 @@ export default function App() {
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
+        adminCedula={adminCedula}
+        adminPassword={adminPassword}
       />
 
       <EditMatchModal

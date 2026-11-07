@@ -17,7 +17,13 @@ import {
 // ============================================================================
 // 1. SECRET ADMIN MODAL (Solo Números: Cédula 7530, Clave 1590, inputMode numeric)
 // ============================================================================
-export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
+export function SecretAdminModal({ 
+  isOpen, 
+  onClose, 
+  onLoginSuccess, 
+  adminCedula = '7530', 
+  adminPassword = '1590' 
+}) {
   const [cedula, setCedula] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,14 +35,14 @@ export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
     setError('');
 
     const validCedulas = [
-      localStorage.getItem('torneo_admin_cedula')?.trim(),
+      adminCedula?.trim(),
       '7530',
       'MICRO2026',
       'ADMIN'
     ].filter(Boolean);
 
     const validPasswords = [
-      localStorage.getItem('torneo_admin_password')?.trim(),
+      adminPassword?.trim(),
       '1590',
       'Torneo123'
     ].filter(Boolean);

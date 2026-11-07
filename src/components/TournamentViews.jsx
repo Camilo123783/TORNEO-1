@@ -16,7 +16,13 @@ import {
   Minus, 
   Plus 
 } from 'lucide-react';
-import { calculateGroupStandings } from '../tournamentData';
+import { 
+  calculateGroupStandings, 
+  isGroupCompleted, 
+  getGroupStatus, 
+  getResolvedPlayoffMatches, 
+  getResolvedPlayoffMatch 
+} from '../tournamentData';
 
 // ============================================================================
 // 1. GROUP STANDINGS (Tablas de Posiciones Grupos A, B, C, D)
@@ -35,7 +41,7 @@ export function GroupStandings({ teams, matches }) {
             <span>Tablas de Posiciones</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium mt-0.5">
-            1º y 2º de cada grupo avanzan a Cuartos de Final
+            1º y 2º de cada grupo avanzan a Cuartos de Final (al completar los 3 PJ)
           </p>
         </div>
 
@@ -73,6 +79,8 @@ export function GroupStandings({ teams, matches }) {
           .filter((grp) => selectedGroup === 'ALL' || selectedGroup === grp)
           .map((grp) => {
             const standings = calculateGroupStandings(teams, matches, grp);
+            const status = getGroupStatus(matches, grp);
+            const isCompleted = status.isCompleted;
 
             return (
               <div
@@ -91,6 +99,20 @@ export function GroupStandings({ teams, matches }) {
                       <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight">Grupo {grp}</h3>
                       <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">3 Equipos</p>
                     </div>
+                  </div>
+
+                  <div>
+                    {isCompleted ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-black text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        Completado (3/3 PJ)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                        <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                        En juego ({status.finished}/3 PJ)
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -165,11 +187,18 @@ export function GroupStandings({ teams, matches }) {
                   </table>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
-                  <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>Clasifican 1º y 2º</span>
-                  </div>
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
+                  {isCompleted ? (
+                    <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>1º y 2º clasificados a Cuartos de Final</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span>Clasifican a Cuartos al finalizar los 3 PJ</span>
+                    </div>
+                  )}
                   <span>Victoria = 3 pts | Empate = 1 pt</span>
                 </div>
               </div>
@@ -190,12 +219,14 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
 
   const getTeam = (teamId) => teams.find((t) => t.id === teamId);
 
-  const filteredMatches = matches.filter((m) => {
-    if (filterPhase !== 'ALL' && m.phase !== filterPhase) return false;
-    if (m.phase === 'groups' && filterGroup !== 'ALL' && m.group !== filterGroup) return false;
-    if (filterStatus !== 'ALL' && m.status !== filterStatus) return false;
-    return true;
-  });
+  const filteredMatches = matches
+    .map((m) => (m.phase === 'playoffs' ? getResolvedPlayoffMatch(m, teams, matches) : m))
+    .filter((m) => {
+      if (filterPhase !== 'ALL' && m.phase !== filterPhase) return false;
+      if (m.phase === 'groups' && filterGroup !== 'ALL' && m.group !== filterGroup) return false;
+      if (filterStatus !== 'ALL' && m.status !== filterStatus) return false;
+      return true;
+    });
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
@@ -302,8 +333,8 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
           {filteredMatches.map((m) => {
-            const home = m.home_team_id ? getTeam(m.home_team_id) : null;
-            const away = m.away_team_id ? getTeam(m.away_team_id) : null;
+            const home = m.resolvedHomeTeam || (m.home_team_id ? getTeam(m.home_team_id) : null);
+            const away = m.resolvedAwayTeam || (m.away_team_id ? getTeam(m.away_team_id) : null);
 
             const homeWon = m.status === 'finished' && m.home_score > m.away_score;
             const awayWon = m.status === 'finished' && m.away_score > m.home_score;
@@ -436,42 +467,40 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
   );
 }
 
-// ============================================================================
+// ==========================================
 // 3. PLAYOFF BRACKET (Cuartos, Semifinales, 3er Puesto y Gran Final)
-// ============================================================================
+// ==========================================
 export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
+  const [mobileTab, setMobileTab] = useState('all'); // 'left', 'center', 'right', 'all'
   const getTeam = (teamId) => teams.find((t) => t.id === teamId);
 
-  const getMatchByBracketCode = (code) => {
-    return matches.find((m) => m.bracket_code === code) || null;
-  };
+  // Auto-resolve all playoff stages dynamically based on 3 completed matches per group
+  const playoffMap = getResolvedPlayoffMatches(matches, teams);
 
-  const qf1 = getMatchByBracketCode('QF1');
-  const qf2 = getMatchByBracketCode('QF2');
-  const qf3 = getMatchByBracketCode('QF3');
-  const qf4 = getMatchByBracketCode('QF4');
+  const qf1 = playoffMap['QF1'];
+  const qf2 = playoffMap['QF2'];
+  const qf3 = playoffMap['QF3'];
+  const qf4 = playoffMap['QF4'];
 
-  const sf1 = getMatchByBracketCode('SF1');
-  const sf2 = getMatchByBracketCode('SF2');
+  const sf1 = playoffMap['SF1'];
+  const sf2 = playoffMap['SF2'];
 
-  const thirdMatch = getMatchByBracketCode('3RD');
-  const finalMatch = getMatchByBracketCode('FINAL');
+  const finalMatch = playoffMap['FINAL'];
+  const thirdMatch = playoffMap['3RD'];
 
-  const championId = finalMatch && finalMatch.status === 'finished'
+  const champion = finalMatch && finalMatch.status === 'finished' && finalMatch.home_score !== null && finalMatch.away_score !== null
     ? finalMatch.home_score > finalMatch.away_score 
-      ? finalMatch.home_team_id 
+      ? (finalMatch.resolvedHomeTeam || getTeam(finalMatch.home_team_id))
       : finalMatch.away_score > finalMatch.home_score 
-      ? finalMatch.away_team_id 
+      ? (finalMatch.resolvedAwayTeam || getTeam(finalMatch.away_team_id))
       : null
     : null;
-
-  const champion = championId ? getTeam(championId) : null;
 
   useEffect(() => {
     if (champion) {
       confetti({
-        particleCount: 100,
-        spread: 70,
+        particleCount: 120,
+        spread: 80,
         origin: { y: 0.6 }
       });
     }
@@ -479,22 +508,25 @@ export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
 
   const renderBracketMatch = (m, label) => {
     if (!m || !m.id) return null;
-    const home = m.home_team_id ? getTeam(m.home_team_id) : null;
-    const away = m.away_team_id ? getTeam(m.away_team_id) : null;
+    const home = m.resolvedHomeTeam || (m.home_team_id ? getTeam(m.home_team_id) : null);
+    const away = m.resolvedAwayTeam || (m.away_team_id ? getTeam(m.away_team_id) : null);
 
-    const homeWon = m.status === 'finished' && m.home_score > m.away_score;
-    const awayWon = m.status === 'finished' && m.away_score > m.home_score;
+    const homeWon = m.status === 'finished' && m.home_score !== null && m.away_score !== null && m.home_score > m.away_score;
+    const awayWon = m.status === 'finished' && m.home_score !== null && m.away_score !== null && m.away_score > m.home_score;
 
     return (
-      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 rounded-2xl p-3 shadow-sm hover:shadow-md relative group transition-all">
-        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 mb-2 pb-1.5 border-b border-slate-100 dark:border-zinc-800/80">
-          <span className="font-extrabold text-slate-800 dark:text-zinc-200">{label || m.round}</span>
-          <div className="flex items-center gap-1.5">
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 rounded-2xl p-3 sm:p-3.5 shadow-xs hover:shadow-md relative group transition-all w-full">
+        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 mb-2 pb-1.5 border-b border-slate-100 dark:border-zinc-800/80 gap-1.5">
+          <span className="font-extrabold text-slate-800 dark:text-zinc-200 truncate">{label || m.round}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
             {m.status === 'finished' && (
-              <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.2 rounded border border-transparent dark:border-emerald-800">Final</span>
+              <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-100 dark:bg-emerald-950/80 px-1.5 py-0.5 rounded border border-transparent dark:border-emerald-800">Final</span>
             )}
             {m.status === 'live' && (
-              <span className="text-[10px] text-red-600 dark:text-red-400 font-black bg-red-50 dark:bg-red-950/50 px-1.5 py-0.2 rounded animate-pulse border border-red-200 dark:border-red-900">En Vivo</span>
+              <span className="text-[10px] text-red-600 dark:text-red-400 font-black bg-red-50 dark:bg-red-950/50 px-1.5 py-0.5 rounded animate-pulse border border-red-200 dark:border-red-900">En Vivo</span>
+            )}
+            {m.status === 'scheduled' && (
+              <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium bg-slate-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded">Próx</span>
             )}
             {isAdmin && (
               <button
@@ -509,10 +541,10 @@ export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
         </div>
 
         {/* Team 1 */}
-        <div className={`flex items-center justify-between py-1.5 px-2 rounded-lg text-xs transition-colors gap-2 ${
+        <div className={`flex items-center justify-between py-1.5 px-2 rounded-xl text-xs transition-colors gap-2 ${
           homeWon 
             ? 'bg-emerald-50 dark:bg-emerald-950/60 font-black text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' 
-            : 'text-slate-800 dark:text-zinc-200 font-semibold'
+            : home ? 'text-slate-800 dark:text-zinc-200 font-semibold' : 'text-slate-400 dark:text-zinc-500 font-medium italic'
         }`}>
           <div className="flex items-center gap-2 truncate min-w-0 flex-1">
             <span className="text-base select-none shrink-0">{home ? home.logo : '🛡️'}</span>
@@ -524,10 +556,10 @@ export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
         </div>
 
         {/* Team 2 */}
-        <div className={`flex items-center justify-between py-1.5 px-2 rounded-lg text-xs mt-1 transition-colors gap-2 ${
+        <div className={`flex items-center justify-between py-1.5 px-2 rounded-xl text-xs mt-1 transition-colors gap-2 ${
           awayWon 
             ? 'bg-emerald-50 dark:bg-emerald-950/60 font-black text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' 
-            : 'text-slate-800 dark:text-zinc-200 font-semibold'
+            : away ? 'text-slate-800 dark:text-zinc-200 font-semibold' : 'text-slate-400 dark:text-zinc-500 font-medium italic'
         }`}>
           <div className="flex items-center gap-2 truncate min-w-0 flex-1">
             <span className="text-base select-none shrink-0">{away ? away.logo : '🛡️'}</span>
@@ -549,17 +581,19 @@ export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8 w-full max-w-full overflow-hidden">
+      {/* Header */}
       <div className="pb-3 border-b border-slate-200 dark:border-zinc-800">
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
           <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 shrink-0" />
           <span>Fase Final • Eliminación Directa</span>
         </h2>
         <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium mt-0.5">
-          Clasifican 8 equipos (1º y 2º de cada grupo) • Cuartos, Semifinales y Gran Final
+          2 Llaves a la Izquierda • La Gran Final en el Centro • 2 Llaves a la Derecha (clasificación automática al completar 3 PJ de grupo)
         </p>
       </div>
 
+      {/* Champion Banner */}
       {champion && (
         <div className="relative overflow-hidden bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 dark:from-amber-950/60 dark:via-yellow-950/40 dark:to-amber-950/60 border-2 border-amber-400 dark:border-amber-600 rounded-3xl p-6 text-center shadow-lg animate-fadeIn">
           <div className="relative z-10 flex flex-col items-center">
@@ -574,55 +608,192 @@ export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
               <span>{champion.name}</span>
             </h3>
             <p className="text-xs text-amber-900/80 dark:text-amber-300/80 mt-2 font-bold">
-              Felicitaciones por coronarse en el Torneo de Microfútbol 2026
+              Felicitaciones por coronarse en el Torneo de Microfútbol Tunja 2026
             </p>
           </div>
         </div>
       )}
 
-      {/* Bracket Tree */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-center">
-        {/* Column 1: Cuartos */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2">
+      {/* 5-Column Desktop Bracket (2 Llaves a la Izquierda, Gran Final en el Centro, 2 Llaves a la Derecha) */}
+      <div className="hidden lg:grid grid-cols-5 gap-3 xl:gap-4 items-stretch">
+        
+        {/* COL 1: Cuartos Izquierda (QF1 & QF2) */}
+        <div className="flex flex-col justify-between gap-4 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 pb-1.5 border-b border-slate-200 dark:border-zinc-800">
             <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
-            Cuartos de Final (8 Equipos)
+            <span>Cuartos (Izq)</span>
           </div>
-          {renderBracketMatch(qf1, 'Cuartos 1 (1A vs 2B)')}
-          {renderBracketMatch(qf2, 'Cuartos 2 (1C vs 2D)')}
-          {renderBracketMatch(qf3, 'Cuartos 3 (1B vs 2A)')}
-          {renderBracketMatch(qf4, 'Cuartos 4 (1D vs 2C)')}
+          <div className="space-y-4 my-auto">
+            {renderBracketMatch(qf1, 'Cuartos 1 (1A vs 2B)')}
+            {renderBracketMatch(qf2, 'Cuartos 2 (1C vs 2D)')}
+          </div>
         </div>
 
-        {/* Column 2: Semifinales */}
-        <div className="space-y-8 md:my-auto">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 mb-2">
+        {/* COL 2: Semifinal 1 (Avanza a la Gran Final ->) */}
+        <div className="flex flex-col justify-between gap-4 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 pb-1.5 border-b border-slate-200 dark:border-zinc-800">
             <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>
-            Semifinales (4 Equipos)
+            <span>Semifinal 1</span>
           </div>
-          {renderBracketMatch(sf1, 'Semifinal 1')}
-          {renderBracketMatch(sf2, 'Semifinal 2')}
-        </div>
-
-        {/* Column 3: Final & 3er Puesto */}
-        <div className="space-y-6 md:my-auto">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2">
-            <Trophy className="w-4 h-4 text-amber-500" />
-            La Gran Final
-          </div>
-
-          <div className="p-1 rounded-2xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 dark:from-amber-600 dark:via-yellow-600 dark:to-amber-600 shadow-md">
-            {renderBracketMatch(finalMatch, '🏆 PARTIDO POR EL TÍTULO')}
-          </div>
-
-          <div className="pt-2">
-            <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-2">
-              <Award className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400" />
-              Tercer Puesto
+          <div className="my-auto space-y-2">
+            {renderBracketMatch(sf1, 'Semifinal 1')}
+            <div className="flex items-center justify-end text-[10px] font-bold text-slate-400 dark:text-zinc-500 pr-1">
+              <span>Avanza a la Gran Final ➔</span>
             </div>
-            {renderBracketMatch(thirdMatch, 'Partido por el 3er Puesto')}
           </div>
         </div>
+
+        {/* COL 3: Centro (Gran Final & 3er Puesto) */}
+        <div className="flex flex-col justify-between gap-4 py-2">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 pb-1.5 border-b border-slate-200 dark:border-zinc-800 text-center">
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <span>Gran Final & 3º Puesto</span>
+          </div>
+
+          <div className="my-auto space-y-4">
+            {/* Gran Final */}
+            <div className="p-1 rounded-2xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 dark:from-amber-600 dark:via-yellow-600 dark:to-amber-600 shadow-md">
+              {renderBracketMatch(finalMatch, '🏆 PARTIDO POR EL TÍTULO')}
+            </div>
+
+            {/* Tercer Puesto */}
+            <div className="pt-1">
+              <div className="flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-1">
+                <Award className="w-3.5 h-3.5" />
+                <span>Tercer Puesto</span>
+              </div>
+              {renderBracketMatch(thirdMatch, 'Partido por el 3er Puesto')}
+            </div>
+          </div>
+        </div>
+
+        {/* COL 4: Semifinal 2 (<- Avanza a la Gran Final) */}
+        <div className="flex flex-col justify-between gap-4 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 pb-1.5 border-b border-slate-200 dark:border-zinc-800">
+            <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+            <span>Semifinal 2</span>
+          </div>
+          <div className="my-auto space-y-2">
+            {renderBracketMatch(sf2, 'Semifinal 2')}
+            <div className="flex items-center justify-start text-[10px] font-bold text-slate-400 dark:text-zinc-500 pl-1">
+              <span>🠔 Avanza a la Gran Final</span>
+            </div>
+          </div>
+        </div>
+
+        {/* COL 5: Cuartos Derecha (QF3 & QF4) */}
+        <div className="flex flex-col justify-between gap-4 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 pb-1.5 border-b border-slate-200 dark:border-zinc-800">
+            <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
+            <span>Cuartos (Der)</span>
+          </div>
+          <div className="space-y-4 my-auto">
+            {renderBracketMatch(qf3, 'Cuartos 3 (1B vs 2A)')}
+            {renderBracketMatch(qf4, 'Cuartos 4 (1D vs 2C)')}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Mobile Bracket View: Segmented pill selector so nothing overflows mobile screens */}
+      <div className="block lg:hidden space-y-4">
+        <div className="flex items-center justify-center gap-1 p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800 overflow-x-auto no-scrollbar text-xs font-bold">
+          <button
+            onClick={() => setMobileTab('all')}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+              mobileTab === 'all'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400 shadow-sm border border-slate-200 dark:border-zinc-700'
+                : 'text-slate-600 dark:text-zinc-400'
+            }`}
+          >
+            Ver Todo
+          </button>
+          <button
+            onClick={() => setMobileTab('left')}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+              mobileTab === 'left'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400 shadow-sm border border-slate-200 dark:border-zinc-700'
+                : 'text-slate-600 dark:text-zinc-400'
+            }`}
+          >
+            🔵 Lado Izquierdo
+          </button>
+          <button
+            onClick={() => setMobileTab('center')}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+              mobileTab === 'center'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400 shadow-sm border border-slate-200 dark:border-zinc-700'
+                : 'text-slate-600 dark:text-zinc-400'
+            }`}
+          >
+            🏆 La Gran Final
+          </button>
+          <button
+            onClick={() => setMobileTab('right')}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+              mobileTab === 'right'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400 shadow-sm border border-slate-200 dark:border-zinc-700'
+                : 'text-slate-600 dark:text-zinc-400'
+            }`}
+          >
+            🔴 Lado Derecho
+          </button>
+        </div>
+
+        {/* Section 1: Lado Izquierdo (Cuartos 1, 2 -> Semifinal 1) */}
+        {(mobileTab === 'all' || mobileTab === 'left') && (
+          <div className="p-3.5 bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 rounded-2xl space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase text-emerald-700 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
+              <span>Lado Izquierdo: Cuartos 1 y 2 ➔ Semifinal 1</span>
+            </div>
+            {renderBracketMatch(qf1, 'Cuartos 1 (1A vs 2B)')}
+            {renderBracketMatch(qf2, 'Cuartos 2 (1C vs 2D)')}
+            <div className="pt-2 border-t border-slate-200 dark:border-zinc-800">
+              <span className="block text-[11px] font-black uppercase text-blue-700 dark:text-blue-400 mb-2">
+                Semifinal 1 (Ganador QF1 vs Ganador QF2)
+              </span>
+              {renderBracketMatch(sf1, 'Semifinal 1')}
+            </div>
+          </div>
+        )}
+
+        {/* Section 2: Centro (La Gran Final & 3er Puesto) */}
+        {(mobileTab === 'all' || mobileTab === 'center') && (
+          <div className="p-3.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-2xl space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase text-amber-700 dark:text-amber-400">
+              <Trophy className="w-4 h-4 text-amber-500" />
+              <span>Centro: La Gran Final & 3er Puesto</span>
+            </div>
+            <div className="p-1 rounded-2xl bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 dark:from-amber-600 dark:via-yellow-600 dark:to-amber-600 shadow-md">
+              {renderBracketMatch(finalMatch, '🏆 PARTIDO POR EL TÍTULO')}
+            </div>
+            <div className="pt-2">
+              <span className="block text-[11px] font-extrabold uppercase text-slate-500 dark:text-zinc-400 mb-1.5">
+                Partido por el 3er Puesto
+              </span>
+              {renderBracketMatch(thirdMatch, 'Partido por el 3er Puesto')}
+            </div>
+          </div>
+        )}
+
+        {/* Section 3: Lado Derecho (Cuartos 3, 4 -> Semifinal 2) */}
+        {(mobileTab === 'all' || mobileTab === 'right') && (
+          <div className="p-3.5 bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 rounded-2xl space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase text-emerald-700 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
+              <span>Lado Derecho: Cuartos 3 y 4 ➔ Semifinal 2</span>
+            </div>
+            {renderBracketMatch(qf3, 'Cuartos 3 (1B vs 2A)')}
+            {renderBracketMatch(qf4, 'Cuartos 4 (1D vs 2C)')}
+            <div className="pt-2 border-t border-slate-200 dark:border-zinc-800">
+              <span className="block text-[11px] font-black uppercase text-blue-700 dark:text-blue-400 mb-2">
+                Semifinal 2 (Ganador QF3 vs Ganador QF4)
+              </span>
+              {renderBracketMatch(sf2, 'Semifinal 2')}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
