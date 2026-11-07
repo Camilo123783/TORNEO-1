@@ -6,35 +6,33 @@ import {
   Calendar, 
   Trophy, 
   Sparkles, 
-  RefreshCw, 
-  Plus, 
   Edit3, 
   Check, 
   Key,
-  Hash,
-  Save
+  UserCheck,
+  Save,
+  AlertTriangle
 } from 'lucide-react';
 import { calculateGroupStandings } from '../utils/standingsCalculator';
 
 export default function AdminPanel({ 
   teams, 
-  setTeams, 
   matches, 
   setMatches, 
   onEditMatch, 
+  onEditTeam,
   onResetTournament,
   onSaveSingleMatch
 }) {
   const [activeAdminTab, setActiveAdminTab] = useState('matches'); // 'matches', 'teams', 'settings'
-  const [editingTeam, setEditingTeam] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Custom credentials state
-  const [customCode, setCustomCode] = useState(
-    localStorage.getItem('torneo_custom_admin_code') || 'MICRO2026'
+  // Custom credentials state (Cédula 7530, Clave 1590)
+  const [customCedula, setCustomCedula] = useState(
+    localStorage.getItem('torneo_admin_cedula') || '7530'
   );
   const [customPass, setCustomPass] = useState(
-    localStorage.getItem('torneo_custom_admin_password') || 'Torneo123'
+    localStorage.getItem('torneo_admin_password') || '1590'
   );
 
   // Quick stats
@@ -52,13 +50,13 @@ export default function AdminPanel({
   // Save new admin credentials
   const handleSaveCredentials = (e) => {
     e.preventDefault();
-    if (!customCode.trim() || !customPass.trim()) {
-      alert('El código y la contraseña no pueden estar vacíos.');
+    if (!customCedula.trim() || !customPass.trim()) {
+      alert('La cédula y la contraseña no pueden estar vacías.');
       return;
     }
-    localStorage.setItem('torneo_custom_admin_code', customCode.trim().toUpperCase());
-    localStorage.setItem('torneo_custom_admin_password', customPass.trim());
-    showNotification('¡Código y contraseña de administrador actualizados correctamente!');
+    localStorage.setItem('torneo_admin_cedula', customCedula.trim());
+    localStorage.setItem('torneo_admin_password', customPass.trim());
+    showNotification('¡Cédula y contraseña de administrador actualizadas correctamente!');
   };
 
   // Automatic propagation of Group Stage 1st & 2nd places into Quarterfinals (QF1..QF4)
@@ -94,7 +92,6 @@ export default function AdminPanel({
     });
 
     setMatches(updatedMatches);
-    // Also save each to Supabase
     if (onSaveSingleMatch) {
       updatedMatches
         .filter((m) => m.bracket_code?.startsWith('QF'))
@@ -134,17 +131,6 @@ export default function AdminPanel({
     }
   };
 
-  // Save team edition
-  const handleSaveTeam = (e) => {
-    e.preventDefault();
-    if (!editingTeam) return;
-
-    const updatedTeams = teams.map((t) => (t.id === editingTeam.id ? editingTeam : t));
-    setTeams(updatedTeams);
-    setEditingTeam(null);
-    showNotification('Equipo actualizado correctamente');
-  };
-
   const getTeam = (teamId) => teams.find((t) => t.id === teamId);
 
   return (
@@ -162,7 +148,7 @@ export default function AdminPanel({
               Panel de Administración del Torneo
             </h2>
             <p className="text-sm text-slate-600 font-medium mt-1 max-w-xl">
-              Carga resultados, actualiza marcadores en tiempo real, edita equipos y define las llaves eliminatorias de la fase final.
+              Carga resultados al instante, edita nombres de equipos, registra plantillas (mínimo 5, máximo 12) y gestiona llaves finales.
             </p>
           </div>
 
@@ -194,8 +180,8 @@ export default function AdminPanel({
             <span className="text-xl font-black text-amber-600">{totalGoals}</span>
           </div>
           <div className="p-3 bg-white rounded-xl border border-emerald-200/70 shadow-sm">
-            <span className="text-[11px] text-slate-500 block font-semibold">Formato</span>
-            <span className="text-xs font-bold text-slate-700">4 Grupos x 3</span>
+            <span className="text-[11px] text-slate-500 block font-semibold">Reglamento</span>
+            <span className="text-xs font-bold text-slate-700">5 a 12 jugadores</span>
           </div>
         </div>
       </div>
@@ -231,7 +217,7 @@ export default function AdminPanel({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Gestionar Equipos ({teams.length})</span>
+          <span>Gestionar Equipos y Jugadores ({teams.length})</span>
         </button>
 
         <button
@@ -264,7 +250,6 @@ export default function AdminPanel({
                   key={m.id}
                   className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 shadow-sm transition-all"
                 >
-                  {/* Top info */}
                   <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 text-xs">
                     <span className="font-extrabold text-slate-800">
                       {m.round} {m.group ? `(Grupo ${m.group})` : `(${m.bracket_code || 'Playoff'})`}
@@ -354,101 +339,59 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* TAB 2: TEAMS MANAGEMENT */}
+      {/* TAB 2: TEAMS & ROSTERS MANAGEMENT */}
       {activeAdminTab === 'teams' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {teams.map((t) => (
-              <div
-                key={t.id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 relative group hover:border-emerald-400 transition-all shadow-sm"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-extrabold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                    Grupo {t.group}
-                  </span>
-                  <button
-                    onClick={() => setEditingTeam(t)}
-                    className="p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl shadow-inner">
-                    {t.logo || '⚽'}
-                  </div>
-                  <div className="truncate">
-                    <h4 className="font-bold text-slate-900 text-sm truncate">{t.name}</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">ID: {t.id}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+        <div className="space-y-4">
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 font-medium">
+            💡 Haz clic en <b>"Editar Nombre y Plantilla"</b> en cualquier equipo para cambiar su nombre, escudo, o agregar/eliminar jugadores (mínimo 5, máximo 12).
           </div>
 
-          {/* Edit Team Modal */}
-          {editingTeam && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl text-slate-800">
-                <h3 className="text-lg font-black text-slate-900 mb-4">Editar Equipo</h3>
-                <form onSubmit={handleSaveTeam} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {teams.map((t) => {
+              const players = t.players || [];
+              const isMinMet = players.length >= 5;
+
+              return (
+                <div
+                  key={t.id}
+                  className="bg-white border border-slate-200 rounded-2xl p-4 relative group hover:border-emerald-400 transition-all shadow-sm flex flex-col justify-between"
+                >
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Nombre</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingTeam.name}
-                      onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:border-emerald-500"
-                    />
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-extrabold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        Grupo {t.group}
+                      </span>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                        isMinMet ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {players.length} / 12 jug.
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 my-2">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl shadow-inner shrink-0">
+                        {t.logo || '⚽'}
+                      </div>
+                      <div className="truncate">
+                        <h4 className="font-extrabold text-slate-900 text-sm truncate">{t.name}</h4>
+                        <p className="text-[11px] text-slate-400 font-medium truncate">
+                          {players.length} inscritos
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Emoji / Logo</label>
-                    <input
-                      type="text"
-                      value={editingTeam.logo}
-                      onChange={(e) => setEditingTeam({ ...editingTeam, logo: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:border-emerald-500"
-                      placeholder="⚽, 🔥, ⚡, 🦁"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Grupo Asignado</label>
-                    <select
-                      value={editingTeam.group}
-                      onChange={(e) => setEditingTeam({ ...editingTeam, group: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:border-emerald-500"
-                    >
-                      <option value="A">Grupo A</option>
-                      <option value="B">Grupo B</option>
-                      <option value="C">Grupo C</option>
-                      <option value="D">Grupo D</option>
-                    </select>
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingTeam(null)}
-                      className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm cursor-pointer"
-                    >
-                      Guardar
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+                  <button
+                    onClick={() => onEditTeam(t)}
+                    className="w-full mt-3 py-2 px-3 rounded-xl bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Editar Nombre y Plantilla</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -463,23 +406,23 @@ export default function AdminPanel({
               <h3 className="text-base font-black text-slate-900">Personalizar Acceso de Administrador</h3>
             </div>
             <p className="text-xs text-slate-500 font-medium mb-4">
-              Cambia el código y la contraseña con los que ingresas en el botón secreto.
+              Cambia la cédula y la contraseña con las que ingresas en el modo oculto.
             </p>
 
             <form onSubmit={handleSaveCredentials} className="space-y-4 max-w-md">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Código de Acceso
+                  Cédula de Administrador
                 </label>
                 <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
                     required
-                    value={customCode}
-                    onChange={(e) => setCustomCode(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 font-bold uppercase focus:outline-none focus:border-emerald-500"
-                    placeholder="MICRO2026"
+                    value={customCedula}
+                    onChange={(e) => setCustomCedula(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 font-bold focus:outline-none focus:border-emerald-500"
+                    placeholder="7530"
                   />
                 </div>
               </div>
@@ -496,7 +439,7 @@ export default function AdminPanel({
                     value={customPass}
                     onChange={(e) => setCustomPass(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 font-bold focus:outline-none focus:border-emerald-500"
-                    placeholder="Torneo123"
+                    placeholder="1590"
                   />
                 </div>
               </div>

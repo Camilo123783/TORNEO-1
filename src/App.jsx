@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import GroupStandings from './components/GroupStandings';
 import MatchesList from './components/MatchesList';
 import PlayoffBracket from './components/PlayoffBracket';
+import TeamsList from './components/TeamsList';
+import TopScorers from './components/TopScorers';
 import AdminPanel from './components/AdminPanel';
 import SecretAdminModal from './components/SecretAdminModal';
 import EditMatchModal from './components/EditMatchModal';
+import TeamRosterModal from './components/TeamRosterModal';
 import { INITIAL_TEAMS, INITIAL_MATCHES } from './data/initialData';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
-import { Lock, Trophy, RefreshCw, ShieldAlert, X } from 'lucide-react';
+import { Lock, Trophy, RefreshCw, X } from 'lucide-react';
 
 export default function App() {
   const isConnected = isSupabaseConfigured();
 
-  // State
+  // State: Teams and Matches (Loaded from localStorage or defaults)
   const [teams, setTeams] = useState(() => {
     const saved = localStorage.getItem('torneo_microfutbol_teams');
     return saved ? JSON.parse(saved) : INITIAL_TEAMS;
@@ -24,87 +27,116 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_MATCHES;
   });
 
-  const [activeTab, setActiveTab] = useState('groups'); // 'groups', 'matches', 'playoffs', 'admin'
+  // Navigation tab: 'groups', 'matches', 'playoffs', 'teams', 'scorers', 'admin'
+  const [activeTab, setActiveTab] = useState('groups');
   
-  // Unlimited permanent admin session: never expires until user clicks exit
+  // Permanent unlimited admin session
   const [isAdmin, setIsAdmin] = useState(() => {
     return localStorage.getItem('torneo_admin_logged') === 'true';
   });
 
+  // Modals state
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
-  const [syncing, setSyncing] = useState(false);
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Sync to local fallback when not connected
+  // Sync to local storage always as instant cache
   useEffect(() => {
-    if (!isConnected) {
-      localStorage.setItem('torneo_microfutbol_teams', JSON.stringify(teams));
-    }
-  }, [teams, isConnected]);
+    localStorage.setItem('torneo_microfutbol_teams', JSON.stringify(teams));
+  }, [teams]);
 
   useEffect(() => {
-    if (!isConnected) {
-      localStorage.setItem('torneo_microfutbol_matches', JSON.stringify(matches));
-    }
-  }, [matches, isConnected]);
+    localStorage.setItem('torneo_microfutbol_matches', JSON.stringify(matches));
+  }, [matches]);
 
-  // Load from Supabase on mount
-  useEffect(() => {
+  // Fast fetch data function (used for initial load, polling, and manual refresh)
+  const fetchData = useCallback(async (showLoading = false) => {
     if (!isConnected || !supabase) return;
 
-    const fetchData = async () => {
-      setSyncing(true);
-      try {
-        const { data: teamsData, error: teamsErr } = await supabase
-          .from('teams')
-          .select('*')
-          .order('name');
-        
-        if (!teamsErr && teamsData && teamsData.length > 0) {
-          setTeams(teamsData);
-        }
-
-        const { data: matchesData, error: matchesErr } = await supabase
-          .from('matches')
-          .select('*')
-          .order('date');
-
-        if (!matchesErr && matchesData && matchesData.length > 0) {
-          setMatches(matchesData);
-        }
-      } catch (err) {
-        console.error('Error al sincronizar datos:', err);
-      } finally {
-        setSyncing(false);
+    if (showLoading) setIsRefreshing(true);
+    try {
+      // 1. Fetch Teams
+      const { data: teamsData, error: teamsErr } = await supabase
+        .from('teams')
+        .select('*')
+        .order('name');
+      
+      if (!teamsErr && teamsData && teamsData.length > 0) {
+        setTeams((prevTeams) => {
+          // Merge Supabase data with local players if players column isn't in DB yet
+          return teamsData.map((remote) => {
+            const local = prevTeams.find((t) => t.id === remote.id);
+            return {
+              ...remote,
+              players: remote.players || (local ? local.players : [])
+            };
+          });
+        });
       }
-    };
 
-    fetchData();
+      // 2. Fetch Matches
+      const { data: matchesData, error: matchesErr } = await supabase
+        .from('matches')
+        .select('*')
+        .order('date');
 
-    // Supabase Realtime subscription
-    const matchesSubscription = supabase
-      .channel('realtime_matches')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          setMatches((prev) => prev.map((m) => (m.id === payload.new.id ? payload.new : m)));
-        } else if (payload.eventType === 'INSERT') {
-          setMatches((prev) => [...prev, payload.new]);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(matchesSubscription);
-    };
+      if (!matchesErr && matchesData && matchesData.length > 0) {
+        setMatches(matchesData);
+      }
+    } catch (err) {
+      console.error('Error al sincronizar datos:', err);
+    } finally {
+      if (showLoading) {
+        setTimeout(() => setIsRefreshing(false), 300);
+      }
+    }
   }, [isConnected]);
 
-  // Save single match to state + Supabase
+  // Initial load
+  useEffect(() => {
+    fetchData();
+
+    // Fast background polling every 4 seconds to guarantee all devices update in real-time
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 4000);
+
+    // Supabase Realtime subscription
+    let matchesSubscription = null;
+    if (isConnected && supabase) {
+      matchesSubscription = supabase
+        .channel('realtime_channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setMatches((prev) => prev.map((m) => (m.id === payload.new.id ? payload.new : m)));
+          } else if (payload.eventType === 'INSERT') {
+            setMatches((prev) => [...prev, payload.new]);
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setTeams((prev) => prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)));
+          }
+        })
+        .subscribe();
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (matchesSubscription && supabase) {
+        supabase.removeChannel(matchesSubscription);
+      }
+    };
+  }, [isConnected, fetchData]);
+
+  // Handle Save Single Match (0ms optimistic state update + Supabase sync)
   const handleSaveMatch = async (updatedMatch) => {
     setMatches((prev) => prev.map((m) => (m.id === updatedMatch.id ? updatedMatch : m)));
 
     if (isConnected && supabase) {
       try {
-        const { error } = await supabase
+        await supabase
           .from('matches')
           .update({
             home_team_id: updatedMatch.home_team_id,
@@ -117,29 +149,59 @@ export default function App() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', updatedMatch.id);
-
-        if (error) throw error;
       } catch (err) {
         console.error('Error al guardar partido en Supabase:', err);
       }
     }
   };
 
-  // Save teams to state + Supabase
-  const handleUpdateTeams = async (newTeams) => {
-    setTeams(newTeams);
+  // Handle Save Team & Players (0ms optimistic state update + resilient Supabase sync)
+  const handleSaveTeam = async (updatedTeam) => {
+    setTeams((prev) => prev.map((t) => (t.id === updatedTeam.id ? updatedTeam : t)));
+
     if (isConnected && supabase) {
       try {
-        for (const t of newTeams) {
-          await supabase.from('teams').upsert(t);
+        // Try saving full object including players
+        const { error } = await supabase.from('teams').upsert(updatedTeam);
+        if (error) {
+          // If players column is not in Supabase yet, save without players column to avoid error
+          const cleanTeam = {
+            id: updatedTeam.id,
+            name: updatedTeam.name,
+            group: updatedTeam.group,
+            logo: updatedTeam.logo,
+            color: updatedTeam.color,
+          };
+          await supabase.from('teams').upsert(cleanTeam);
         }
       } catch (err) {
-        console.error('Error al guardar equipos:', err);
+        console.error('Error al guardar equipo en Supabase:', err);
       }
     }
   };
 
-  // Reset tournament
+  // Update Player Goals directly (e.g. from Goleadores table)
+  const handleUpdatePlayerGoals = (teamId, playerId, delta) => {
+    setTeams((prev) =>
+      prev.map((team) => {
+        if (team.id === teamId) {
+          const updatedPlayers = (team.players || []).map((p) => {
+            if (p.id === playerId) {
+              return { ...p, goals: Math.max(0, (p.goals || 0) + delta) };
+            }
+            return p;
+          });
+          const updatedTeam = { ...team, players: updatedPlayers };
+          // Background sync
+          handleSaveTeam(updatedTeam);
+          return updatedTeam;
+        }
+        return team;
+      })
+    );
+  };
+
+  // Reset Tournament
   const handleResetTournament = async () => {
     setTeams(INITIAL_TEAMS);
     setMatches(INITIAL_MATCHES);
@@ -149,7 +211,13 @@ export default function App() {
     if (isConnected && supabase) {
       try {
         for (const t of INITIAL_TEAMS) {
-          await supabase.from('teams').upsert(t);
+          await supabase.from('teams').upsert({
+            id: t.id,
+            name: t.name,
+            group: t.group,
+            logo: t.logo,
+            color: t.color,
+          });
         }
         for (const m of INITIAL_MATCHES) {
           await supabase.from('matches').upsert(m);
@@ -160,14 +228,13 @@ export default function App() {
     }
   };
 
-  // Handle Login Success (Unlimited permanent session)
+  // Handle Login / Logout
   const handleLoginSuccess = () => {
     setIsAdmin(true);
     localStorage.setItem('torneo_admin_logged', 'true');
     setActiveTab('admin');
   };
 
-  // Handle Logout
   const handleLogout = () => {
     setIsAdmin(false);
     localStorage.removeItem('torneo_admin_logged');
@@ -177,12 +244,12 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800 selection:bg-emerald-500 selection:text-white">
       
-      {/* High-Visibility Admin Banner (Imposible de confundir) */}
+      {/* High-Visibility Admin Banner (Visible en todo momento en modo admin) */}
       {isAdmin && (
         <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-4 shadow-sm flex items-center justify-between sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <span className="p-1 bg-white/20 rounded">⚡</span>
-            <span>MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores y clasificados</span>
+            <span>MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores, nombres de equipos y jugadores</span>
           </div>
           <button 
             onClick={handleLogout}
@@ -199,21 +266,15 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isAdmin={isAdmin}
-        onOpenLogin={() => setIsLoginModalOpen(false || true)}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
         onLogout={handleLogout}
+        onRefresh={() => fetchData(true)}
+        isRefreshing={isRefreshing}
       />
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* Syncing spinner */}
-        {syncing && (
-          <div className="mb-4 flex items-center justify-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 py-1.5 px-4 rounded-full w-fit mx-auto animate-pulse font-medium">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-            <span>Actualizando datos del torneo...</span>
-          </div>
-        )}
-
         {/* Tab 1: Group Standings */}
         {activeTab === 'groups' && (
           <GroupStandings teams={teams} matches={matches} />
@@ -239,15 +300,33 @@ export default function App() {
           />
         )}
 
-        {/* Tab 4: Admin Panel */}
+        {/* Tab 4: Teams and Players List */}
+        {activeTab === 'teams' && (
+          <TeamsList
+            teams={teams}
+            isAdmin={isAdmin}
+            onEditTeam={(team) => setEditingTeam(team)}
+          />
+        )}
+
+        {/* Tab 5: Top Scorers (Goleadores) */}
+        {activeTab === 'scorers' && (
+          <TopScorers
+            teams={teams}
+            isAdmin={isAdmin}
+            onUpdatePlayerGoals={handleUpdatePlayerGoals}
+          />
+        )}
+
+        {/* Tab 6: Admin Panel */}
         {activeTab === 'admin' && isAdmin && (
           <AdminPanel
             teams={teams}
-            setTeams={handleUpdateTeams}
             matches={matches}
             setMatches={setMatches}
             onSaveSingleMatch={handleSaveMatch}
             onEditMatch={(m) => setEditingMatch(m)}
+            onEditTeam={(team) => setEditingTeam(team)}
             onResetTournament={handleResetTournament}
           />
         )}
@@ -268,32 +347,26 @@ export default function App() {
         onSave={handleSaveMatch}
       />
 
-      {/* Footer with Discreet Admin Secret Entry */}
+      <TeamRosterModal
+        isOpen={Boolean(editingTeam)}
+        onClose={() => setEditingTeam(null)}
+        team={editingTeam}
+        onSaveTeam={handleSaveTeam}
+      />
+
+      {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-emerald-600" />
-            <span className="font-bold text-slate-700">Torneo de Microfútbol 2026</span>
+            <img src="/logo.jpg" alt="Logo" className="w-5 h-5 rounded-full object-contain" />
+            <span className="font-bold text-slate-700">Torneo de Microfútbol Tunja 2026</span>
             <span>•</span>
             <span>12 Equipos en 4 Grupos</span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                if (isAdmin) {
-                  setActiveTab('admin');
-                } else {
-                  setIsLoginModalOpen(true);
-                }
-              }}
-              title="Acceso confidencial (Ctrl+Shift+A)"
-              className="flex items-center gap-1.5 opacity-20 hover:opacity-100 transition-all hover:text-emerald-700 p-1.5 rounded cursor-pointer"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span className="text-[11px]">{isAdmin ? 'Panel' : 'Acceso'}</span>
-            </button>
-          </div>
+          <p className="text-[11px] text-slate-400">
+            Fútbol de Salón • Tunja, Boyacá
+          </p>
         </div>
       </footer>
     </div>
