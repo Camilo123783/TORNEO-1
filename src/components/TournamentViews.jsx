@@ -87,8 +87,6 @@ export function GroupStandings({ teams, matches }) {
                 key={grp}
                 className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden w-full max-w-full"
               >
-                <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-50 dark:bg-emerald-950/20 rounded-full blur-2xl pointer-events-none"></div>
-
                 {/* Group Card Header */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
