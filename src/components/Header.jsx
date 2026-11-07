@@ -9,7 +9,8 @@ import {
   Award, 
   RefreshCw,
   Moon,
-  Sun
+  Sun,
+  Lock
 } from 'lucide-react';
 
 export default function Header({ 
@@ -28,7 +29,7 @@ export default function Header({
   const isLongPressRef = useRef(false);
   const pressStartRef = useRef(0);
 
-  // Unified Pointer events for 1-tap dark mode & 2-second hold for admin
+  // Unified Pointer events for 1-tap dark mode & 2-second hold for admin without mobile context menu
   const handlePointerDown = (e) => {
     isLongPressRef.current = false;
     pressStartRef.current = Date.now();
@@ -39,7 +40,7 @@ export default function Header({
         isLongPressRef.current = true;
         setIsHolding(false);
         onOpenLogin();
-      }, 2000);
+      }, 1500);
     }
   };
 
@@ -50,9 +51,9 @@ export default function Header({
     }
     setIsHolding(false);
 
-    // If it was NOT a 2-second hold, it's a single tap/click -> Toggle Dark Mode!
+    // If it was NOT a hold, it's a single tap/click -> Toggle Dark Mode!
     const elapsed = Date.now() - pressStartRef.current;
-    if (!isLongPressRef.current && elapsed < 1800) {
+    if (!isLongPressRef.current && elapsed < 1400) {
       if (onToggleDarkMode) {
         onToggleDarkMode();
       }
@@ -94,22 +95,38 @@ export default function Header({
           
           {/* Logo & Title */}
           <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-            {/* Tournament Logo: 1 tap = Dark Mode | 2s hold = Admin */}
+            {/* Tournament Logo: 1 tap = Dark Mode | Hold = Admin (Sin descarga de fotos en móvil) */}
             <div
               onPointerDown={handlePointerDown}
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerCancel}
               onPointerCancel={handlePointerCancel}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }}
+              style={{
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                touchAction: 'manipulation'
+              }}
               className={`relative cursor-pointer transition-transform select-none shrink-0 ${
                 isHolding ? 'scale-95' : 'hover:scale-102 active:scale-95'
               }`}
-              title="1 toque: Modo oscuro | Mantener presionado 2s: Acceso Admin"
+              title="1 toque: Modo oscuro | Mantener presionado: Acceso Admin"
             >
               <img
                 src="/logo.jpg"
                 alt="Logo Tunja"
-                className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl object-contain drop-shadow-sm border border-slate-200 dark:border-zinc-700 p-0.5 bg-white dark:bg-zinc-900 shrink-0"
+                className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl object-contain drop-shadow-sm border border-slate-200 dark:border-zinc-700 p-0.5 bg-white dark:bg-zinc-900 shrink-0 pointer-events-none select-none"
                 draggable={false}
+                style={{
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  pointerEvents: 'none'
+                }}
               />
               
               {/* Subtle indicator while holding */}
@@ -151,7 +168,17 @@ export default function Header({
               <span className="hidden sm:inline">{isRefreshing ? 'Cargando...' : 'Actualizar'}</span>
             </button>
 
-            {isAdmin && (
+            {/* Botón directo de Acceso Admin para móvil y escritorio */}
+            {!isAdmin ? (
+              <button
+                onClick={onOpenLogin}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-xl transition-all border border-emerald-300 dark:border-emerald-800 cursor-pointer shadow-2xs"
+                title="Ingresar como Administrador (1 clic)"
+              >
+                <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Admin</span>
+              </button>
+            ) : (
               <button
                 onClick={onLogout}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-600 dark:text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors border border-red-200 dark:border-red-900 cursor-pointer"
@@ -226,7 +253,7 @@ export default function Header({
             <span>Goleadores ⚽</span>
           </button>
 
-          {isAdmin && (
+          {isAdmin ? (
             <button
               onClick={() => setActiveTab('admin')}
               className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ml-auto cursor-pointer shrink-0 ${
@@ -237,6 +264,15 @@ export default function Header({
             >
               <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Panel Admin</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenLogin}
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ml-auto cursor-pointer shrink-0 text-slate-500 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-zinc-900 border border-transparent hover:border-slate-200 dark:hover:border-zinc-800"
+              title="Acceso de Administrador"
+            >
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Admin</span>
             </button>
           )}
         </nav>

@@ -11,9 +11,11 @@ import {
   UserCheck,
   Save,
   Plus,
-  Minus
+  Minus,
+  RotateCcw
 } from 'lucide-react';
 import { calculateGroupStandings, isGroupCompleted, getResolvedPlayoffMatch } from '../tournamentData';
+import { GoalAssignModal } from './Modals';
 
 export default function AdminPanel({ 
   teams, 
@@ -23,12 +25,14 @@ export default function AdminPanel({
   onEditTeam,
   onResetTournament,
   onSaveSingleMatch,
+  onUpdatePlayerGoals,
   adminCedula = '7530',
   adminPassword = '1590',
   onUpdateCredentials
 }) {
   const [activeAdminTab, setActiveAdminTab] = useState('matches'); // 'matches', 'teams', 'settings'
   const [successMsg, setSuccessMsg] = useState('');
+  const [goalModalData, setGoalModalData] = useState(null); // { match, team, teamType, mode: 'add'|'subtract' }
 
   // Custom credentials state (Cédula 7530, Clave 1590 sincronizadas en Supabase)
   const [customCedula, setCustomCedula] = useState(adminCedula);
@@ -74,8 +78,8 @@ export default function AdminPanel({
     }
   };
 
-  // Quick score updater
-  const handleQuickScoreChange = (matchId, teamType, delta) => {
+  // Quick score updater sin modal (para equipos TBD o sin plantilla)
+  const handleDirectScoreChange = (matchId, teamType, delta) => {
     let updatedMatch = null;
     const now = Date.now();
     const updated = matches.map((m) => {
@@ -105,6 +109,82 @@ export default function AdminPanel({
     if (updatedMatch && onSaveSingleMatch) {
       onSaveSingleMatch(updatedMatch);
     }
+  };
+
+  // Clic en '+' para anotar gol: Abre modal para elegir jugador autor del gol
+  const handlePlusScore = (match, team, teamType) => {
+    if (!team || !team.players || team.players.length === 0) {
+      handleDirectScoreChange(match.id, teamType, 1);
+      return;
+    }
+    setGoalModalData({ match, team, teamType, mode: 'add' });
+  };
+
+  // Clic en '-' para restar gol: Abre modal para descontar a jugador
+  const handleMinusScore = (match, team, teamType) => {
+    const currentScore = teamType === 'home' ? match.home_score : match.away_score;
+    if (!currentScore || currentScore <= 0) return;
+
+    if (!team || !team.players || team.players.length === 0) {
+      handleDirectScoreChange(match.id, teamType, -1);
+      return;
+    }
+    setGoalModalData({ match, team, teamType, mode: 'subtract' });
+  };
+
+  // Confirmar gol desde el modal: suma al marcador y al jugador en tabla de goleadores
+  const handleConfirmGoal = (playerId) => {
+    if (!goalModalData) return;
+    const { match, team, teamType, mode } = goalModalData;
+    const delta = mode === 'add' ? 1 : -1;
+
+    let currentHome = match.home_score !== null ? match.home_score : 0;
+    let currentAway = match.away_score !== null ? match.away_score : 0;
+
+    if (teamType === 'home') {
+      currentHome = Math.max(0, currentHome + delta);
+    } else {
+      currentAway = Math.max(0, currentAway + delta);
+    }
+
+    const updatedMatch = {
+      ...match,
+      home_score: currentHome,
+      away_score: currentAway,
+      status: match.status === 'scheduled' ? 'live' : match.status,
+      local_updated_at: Date.now(),
+    };
+
+    // Actualizar partido en memoria y en Supabase
+    setMatches((prev) => prev.map((m) => (m.id === updatedMatch.id ? updatedMatch : m)));
+    if (onSaveSingleMatch) {
+      onSaveSingleMatch(updatedMatch);
+    }
+
+    // Actualizar goles del jugador en memoria y en Supabase (tabla players y goleadores)
+    if (playerId && team && onUpdatePlayerGoals) {
+      onUpdatePlayerGoals(team.id, playerId, delta);
+    }
+
+    const playerName = playerId && team?.players
+      ? team.players.find((p) => p.id === playerId)?.name
+      : null;
+
+    if (mode === 'add') {
+      showNotification(
+        playerName
+          ? `⚽ ¡Gol validado a ${playerName}! (${team.name} ${currentHome} - ${currentAway})`
+          : `⚽ ¡Gol sumado a ${team.name}! (${currentHome} - ${currentAway})`
+      );
+    } else {
+      showNotification(
+        playerName
+          ? `⚠️ Gol descontado a ${playerName}. (${team.name} ${currentHome} - ${currentAway})`
+          : `⚠️ Marcador ajustado para ${team.name}. (${currentHome} - ${currentAway})`
+      );
+    }
+
+    setGoalModalData(null);
   };
 
   // Direct status updater
@@ -155,6 +235,22 @@ export default function AdminPanel({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ ¿Estás seguro de que deseas reiniciar todos los resultados del torneo a cero?\n\n- Todos los marcadores quedarán en 0-0 (programados)\n- Los goles de los jugadores volverán a 0 en la tabla de goleadores\n- Las llaves de eliminación directa volverán a su estado inicial')) {
+                  if (onResetTournament) {
+                    onResetTournament();
+                    showNotification('¡Torneo y resultados reiniciados exitosamente!');
+                  }
+                }
+              }}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs shadow-md shadow-red-600/20 transition-all cursor-pointer"
+              title="Reiniciar todos los resultados y marcadores a cero"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Reiniciar Torneo (Resultados)</span>
+            </button>
+
             <button
               onClick={handleAutoSeedQuarterfinals}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
@@ -322,8 +418,9 @@ export default function AdminPanel({
                       
                       <div className="flex items-center gap-1 shrink-0">
                         <button
-                          onClick={() => handleQuickScoreChange(m.id, 'home', -1)}
+                          onClick={() => handleMinusScore(m, home, 'home')}
                           className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 font-black text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 shadow-2xs cursor-pointer active:scale-90"
+                          title="Restar gol"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
@@ -331,8 +428,9 @@ export default function AdminPanel({
                           {m.home_score !== null ? m.home_score : 0}
                         </span>
                         <button
-                          onClick={() => handleQuickScoreChange(m.id, 'home', 1)}
+                          onClick={() => handlePlusScore(m, home, 'home')}
                           className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-2xs cursor-pointer active:scale-90"
+                          title="Anotar gol (seleccionar jugador)"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -350,8 +448,9 @@ export default function AdminPanel({
                       
                       <div className="flex items-center gap-1 shrink-0">
                         <button
-                          onClick={() => handleQuickScoreChange(m.id, 'away', -1)}
+                          onClick={() => handleMinusScore(m, away, 'away')}
                           className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 font-black text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 shadow-2xs cursor-pointer active:scale-90"
+                          title="Restar gol"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
@@ -359,8 +458,9 @@ export default function AdminPanel({
                           {m.away_score !== null ? m.away_score : 0}
                         </span>
                         <button
-                          onClick={() => handleQuickScoreChange(m.id, 'away', 1)}
+                          onClick={() => handlePlusScore(m, away, 'away')}
                           className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center shadow-2xs cursor-pointer active:scale-90"
+                          title="Anotar gol (seleccionar jugador)"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -522,6 +622,17 @@ export default function AdminPanel({
 
         </div>
       )}
+
+      {/* Modal para Asignar Autor del Gol para Validar */}
+      <GoalAssignModal
+        isOpen={Boolean(goalModalData)}
+        onClose={() => setGoalModalData(null)}
+        match={goalModalData?.match}
+        team={goalModalData?.team}
+        teamType={goalModalData?.teamType}
+        mode={goalModalData?.mode}
+        onConfirmGoal={handleConfirmGoal}
+      />
 
     </div>
   );

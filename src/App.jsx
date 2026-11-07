@@ -346,39 +346,45 @@ export default function App() {
     }
   };
 
-  // Reiniciar torneo directamente en tablas de Supabase
+  // Reiniciar torneo directamente en tablas de Supabase (Marcadores a 0 y Goles a 0)
   const handleResetTournament = async () => {
-    if (!confirm('¿Seguro que deseas reiniciar los marcadores y equipos a su estado original en Supabase?')) {
-      return;
-    }
-    setTeams(INITIAL_TEAMS);
-    setMatches(INITIAL_MATCHES);
+    // 1. Equipos con jugadores en 0 goles
+    const resetTeams = teams.map((t) => ({
+      ...t,
+      players: (t.players || []).map((p) => ({ ...p, goals: 0 })),
+    }));
+
+    // 2. Partidos reiniciados (0-0, programados, llaves de playoffs limpias)
+    const resetMatches = INITIAL_MATCHES.map((m) => ({
+      ...m,
+      home_score: null,
+      away_score: null,
+      status: 'scheduled',
+      home_team_id: m.phase === 'playoffs' ? null : m.home_team_id,
+      away_team_id: m.phase === 'playoffs' ? null : m.away_team_id,
+    }));
+
+    setTeams(resetTeams);
+    setMatches(resetMatches);
 
     if (isConnected && supabase) {
       try {
-        for (const t of INITIAL_TEAMS) {
-          await supabase.from('teams').upsert({
-            id: t.id,
-            name: t.name,
-            group: t.group,
-            logo: t.logo,
-            color: t.color,
-          });
+        // Restablecer jugadores a 0 goles en Supabase
+        for (const t of resetTeams) {
           if (Array.isArray(t.players)) {
             for (const p of t.players) {
               try {
-                await supabase.from('players').upsert({
-                  id: p.id,
-                  team_id: t.id,
-                  name: p.name,
-                  number: p.number,
-                  goals: p.goals || 0,
-                });
+                await supabase
+                  .from('players')
+                  .update({ goals: 0 })
+                  .eq('id', p.id);
               } catch (e) {}
             }
           }
         }
-        for (const m of INITIAL_MATCHES) {
+
+        // Restablecer todos los partidos a scheduled y marcadores null en Supabase
+        for (const m of resetMatches) {
           await supabase.from('matches').upsert({
             id: m.id,
             round: m.round,
@@ -389,13 +395,13 @@ export default function App() {
             away_label: m.away_label,
             home_team_id: m.home_team_id,
             away_team_id: m.away_team_id,
-            home_score: m.home_score,
-            away_score: m.away_score,
-            status: m.status,
+            home_score: null,
+            away_score: null,
+            status: 'scheduled',
             date: m.date,
           });
         }
-        fetchData(true);
+        await fetchData(true);
       } catch (err) {
         console.error('Error al reiniciar base de datos en Supabase:', err);
       }
@@ -507,6 +513,7 @@ export default function App() {
             onEditMatch={(m) => setEditingMatch(m)}
             onEditTeam={(team) => setEditingTeam(team)}
             onResetTournament={handleResetTournament}
+            onUpdatePlayerGoals={handleUpdatePlayerGoals}
             adminCedula={adminCedula}
             adminPassword={adminPassword}
             onUpdateCredentials={handleUpdateCredentials}

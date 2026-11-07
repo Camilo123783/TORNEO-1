@@ -11,7 +11,8 @@ import {
   Plus, 
   Trash2, 
   Clock, 
-  MapPin 
+  MapPin,
+  Award 
 } from 'lucide-react';
 
 // ============================================================================
@@ -724,6 +725,139 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
           </div>
 
         </form>
+
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 4. GOAL ASSIGN MODAL (Asignar autor del gol para validar y sumar a Goleadores)
+// ============================================================================
+export function GoalAssignModal({
+  isOpen,
+  onClose,
+  match,
+  team,
+  teamType, // 'home' | 'away'
+  mode = 'add', // 'add' | 'subtract'
+  onConfirmGoal
+}) {
+  if (!isOpen || !match || !team) return null;
+
+  const players = team.players || [];
+  // Para restar gol: mostrar jugadores con goles > 0 o todos si no hay
+  const filteredPlayers = mode === 'subtract'
+    ? players.filter((p) => (p.goals || 0) > 0)
+    : players;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[90vh] flex flex-col text-slate-800 dark:text-slate-100 transition-colors">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-2xl p-2 bg-slate-100 dark:bg-zinc-900 rounded-xl shrink-0 select-none">
+              {team.logo || '⚽'}
+            </span>
+            <div className="min-w-0">
+              <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider block ${
+                mode === 'add' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+              }`}>
+                {mode === 'add' ? '⚽ Anotar Gol' : '⚠️ Anular / Descontar Gol'}
+              </span>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">
+                {team.name}
+              </h3>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+            title="Cerrar (No validar gol)"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Instructions */}
+        <div className="py-2.5">
+          <p className="text-xs text-slate-600 dark:text-zinc-400 font-medium">
+            {mode === 'add'
+              ? '¿Quién marcó el gol? Selecciona al jugador para sumárselo en la tabla de goleadores y validar el gol en el partido:'
+              : '¿A qué jugador deseas descontarle el gol en el marcador y en la tabla de goleadores?'}
+          </p>
+        </div>
+
+        {/* Players List */}
+        <div className="flex-1 overflow-y-auto space-y-1.5 py-1 pr-1 max-h-60 no-scrollbar">
+          {filteredPlayers.length === 0 && mode === 'subtract' ? (
+            <div className="py-4 text-center">
+              <p className="text-xs text-slate-500 dark:text-zinc-400 italic">
+                Ningún jugador de este equipo tiene goles registrados en la tabla de goleadores.
+              </p>
+            </div>
+          ) : filteredPlayers.length === 0 ? (
+            <div className="py-4 text-center">
+              <p className="text-xs text-slate-500 dark:text-zinc-400 italic">
+                Este equipo aún no tiene jugadores inscritos en su plantilla.
+              </p>
+            </div>
+          ) : (
+            filteredPlayers.map((player) => (
+              <button
+                key={player.id}
+                type="button"
+                onClick={() => onConfirmGoal(player.id)}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition-all text-left group cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-mono font-black text-xs flex items-center justify-center shrink-0 border border-emerald-300 dark:border-emerald-800">
+                    #{player.number}
+                  </span>
+                  <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-zinc-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 truncate">
+                    {player.name}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 text-xs">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-zinc-500">
+                    {player.goals || 0} {player.goals === 1 ? 'gol' : 'goles'}
+                  </span>
+                  <span className={`font-black text-xs px-2 py-0.5 rounded-md ${
+                    mode === 'add'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-red-600 text-white'
+                  }`}>
+                    {mode === 'add' ? '+1' : '-1'}
+                  </span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* Footer actions: Autogol / Descontar sin jugador & Cancelar */}
+        <div className="pt-3 mt-2 border-t border-slate-100 dark:border-zinc-800 space-y-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => onConfirmGoal(null)}
+            className="w-full py-2 px-3 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-900 text-slate-600 dark:text-zinc-400 text-xs font-bold transition-all text-center cursor-pointer"
+          >
+            {mode === 'add'
+              ? '🔄 Autogol / Gol en contra (No sumar a ningún jugador)'
+              : 'Solo restar 1 al marcador (Sin descontar a ningún jugador)'}
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 px-3 rounded-xl bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-bold transition-all text-center cursor-pointer"
+          >
+            Cancelar (No validar gol)
+          </button>
+        </div>
 
       </div>
     </div>
