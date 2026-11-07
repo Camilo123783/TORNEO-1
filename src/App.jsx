@@ -92,15 +92,33 @@ export default function App() {
         .from('teams')
         .select('*')
         .order('id');
+
+      // Intentar cargar de la tabla independiente 'players' si existe
+      let playersData = null;
+      try {
+        const { data: pData } = await supabase
+          .from('players')
+          .select('*')
+          .order('number');
+        if (pData && pData.length > 0) {
+          playersData = pData;
+        }
+      } catch (e) {}
       
       if (!teamsErr && teamsData && teamsData.length > 0) {
         setTeams(teamsData.map((remote) => {
           const fallbackTeam = INITIAL_TEAMS.find((t) => t.id === remote.id);
+          const relatedPlayers = playersData
+            ? playersData.filter((p) => p.team_id === remote.id)
+            : null;
+
           return {
             ...remote,
-            players: Array.isArray(remote.players) && remote.players.length > 0
-              ? remote.players 
-              : (fallbackTeam ? fallbackTeam.players : [])
+            players: relatedPlayers && relatedPlayers.length > 0
+              ? relatedPlayers
+              : (Array.isArray(remote.players) && remote.players.length > 0
+                  ? remote.players 
+                  : (fallbackTeam ? fallbackTeam.players : []))
           };
         }));
       }
@@ -165,6 +183,21 @@ export default function App() {
             setTeams((prev) => prev.map((t) => (t.id === payload.new.id ? { ...t, ...payload.new } : t)));
           }
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setTeams((prev) =>
+              prev.map((team) => {
+                if (team.id === payload.new.team_id) {
+                  const updatedPlayers = (team.players || []).map((p) =>
+                    p.id === payload.new.id ? { ...p, ...payload.new } : p
+                  );
+                  return { ...team, players: updatedPlayers };
+                }
+                return team;
+              })
+            );
+          }
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_settings' }, (payload) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             if (payload.new.key === 'admin_cedula') setAdminCedula(payload.new.value);
@@ -227,13 +260,13 @@ export default function App() {
     }
   };
 
-  // Guardar equipo y jugadores directamente en la tabla 'teams' de Supabase
+  // Guardar equipo y jugadores directamente en las tablas 'teams' y 'players' de Supabase
   const handleSaveTeam = async (updatedTeam) => {
     setTeams((prev) => prev.map((t) => (t.id === updatedTeam.id ? updatedTeam : t)));
 
     if (isConnected && supabase) {
       try {
-        const { error } = await supabase
+        await supabase
           .from('teams')
           .update({
             name: updatedTeam.name,
@@ -244,19 +277,18 @@ export default function App() {
           })
           .eq('id', updatedTeam.id);
 
-        if (error) {
-          if (error.code === '42703') {
-            await supabase
-              .from('teams')
-              .update({
-                name: updatedTeam.name,
-                group: updatedTeam.group,
-                logo: updatedTeam.logo,
-                color: updatedTeam.color,
-              })
-              .eq('id', updatedTeam.id);
-          } else {
-            console.error('Error al guardar equipo en Supabase:', error);
+        // Guardar/actualizar jugadores individualmente en la tabla 'players'
+        if (Array.isArray(updatedTeam.players) && updatedTeam.players.length > 0) {
+          for (const p of updatedTeam.players) {
+            try {
+              await supabase.from('players').upsert({
+                id: p.id,
+                team_id: updatedTeam.id,
+                name: p.name,
+                number: p.number,
+                goals: p.goals || 0,
+              });
+            } catch (err) {}
           }
         }
       } catch (err) {
@@ -265,15 +297,17 @@ export default function App() {
     }
   };
 
-  // Guardar goles de jugadores directamente en Supabase
-  const handleUpdatePlayerGoals = (teamId, playerId, delta) => {
+  // Guardar goles de jugadores directamente en Supabase (tabla 'players' y 'teams')
+  const handleUpdatePlayerGoals = async (teamId, playerId, delta) => {
+    let newGoals = 0;
     setTeams((prev) => {
       let updatedTeam = null;
       const nextTeams = prev.map((team) => {
         if (team.id === teamId) {
           const updatedPlayers = (team.players || []).map((p) => {
             if (p.id === playerId) {
-              return { ...p, goals: Math.max(0, (p.goals || 0) + delta) };
+              newGoals = Math.max(0, (p.goals || 0) + delta);
+              return { ...p, goals: newGoals };
             }
             return p;
           });
@@ -288,6 +322,12 @@ export default function App() {
       }
       return nextTeams;
     });
+
+    if (isConnected && supabase) {
+      try {
+        await supabase.from('players').update({ goals: newGoals }).eq('id', playerId);
+      } catch (err) {}
+    }
   };
 
   // Guardar credenciales de administración en tabla tournament_settings de Supabase
@@ -323,8 +363,20 @@ export default function App() {
             group: t.group,
             logo: t.logo,
             color: t.color,
-            players: t.players,
           });
+          if (Array.isArray(t.players)) {
+            for (const p of t.players) {
+              try {
+                await supabase.from('players').upsert({
+                  id: p.id,
+                  team_id: t.id,
+                  name: p.name,
+                  number: p.number,
+                  goals: p.goals || 0,
+                });
+              } catch (e) {}
+            }
+          }
         }
         for (const m of INITIAL_MATCHES) {
           await supabase.from('matches').upsert({
