@@ -43,6 +43,21 @@ export default function App() {
     return localStorage.getItem('torneo_admin_logged') === 'true';
   });
 
+  // Dark mode state: persisted in localStorage (active on single click on logo)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('torneo_dark_mode') === 'true';
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('torneo_dark_mode', 'true');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('torneo_dark_mode', 'false');
+    }
+  }, [isDarkMode]);
+
   // Modals state
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
@@ -250,7 +265,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800 selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-black text-slate-800 dark:text-slate-100 selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       
       {/* High-Visibility Admin Banner (Visible en todo momento en modo admin) */}
       {isAdmin && (
@@ -270,7 +285,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header with 1-tap Dark Mode & 2-sec hold for Admin */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -279,6 +294,8 @@ export default function App() {
         onLogout={handleLogout}
         onRefresh={() => fetchData(true)}
         isRefreshing={isRefreshing}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
       />
 
       {/* Main Content */}
@@ -364,18 +381,12 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="mt-auto border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-black py-6 text-xs text-slate-500 dark:text-zinc-500 transition-colors">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center">
           <div className="flex items-center gap-2">
             <img src="/logo.jpg" alt="Logo" className="w-5 h-5 rounded-full object-contain" />
-            <span className="font-bold text-slate-700">Torneo de Microfútbol Tunja 2026</span>
-            <span>•</span>
-            <span>12 Equipos en 4 Grupos</span>
+            <span className="font-bold text-slate-700 dark:text-zinc-300">Torneo de Microfútbol Tunja 2026</span>
           </div>
-
-          <p className="text-[11px] text-slate-400">
-            Fútbol de Salón • Tunja, Boyacá
-          </p>
         </div>
       </footer>
     </div>
