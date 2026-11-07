@@ -1,0 +1,748 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  X, 
+  Save, 
+  Lock, 
+  KeyRound, 
+  AlertCircle, 
+  ShieldCheck, 
+  UserCheck, 
+  Users, 
+  Plus, 
+  Trash2, 
+  Clock, 
+  MapPin 
+} from 'lucide-react';
+
+// ============================================================================
+// 1. SECRET ADMIN MODAL (Cédula 7530, Clave 1590, Sin pistas visibles)
+// ============================================================================
+export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
+  const [cedula, setCedula] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+
+    const validCedulas = [
+      localStorage.getItem('torneo_admin_cedula')?.trim(),
+      '7530',
+      'MICRO2026',
+      'ADMIN'
+    ].filter(Boolean);
+
+    const validPasswords = [
+      localStorage.getItem('torneo_admin_password')?.trim(),
+      '1590',
+      'Torneo123'
+    ].filter(Boolean);
+
+    const inputCedula = cedula.trim();
+    const inputPass = password.trim();
+
+    if (!validCedulas.includes(inputCedula)) {
+      setError('Cédula incorrecta.');
+      return;
+    }
+
+    if (!validPasswords.includes(inputPass)) {
+      setError('Contraseña incorrecta.');
+      return;
+    }
+
+    onLoginSuccess();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 overflow-hidden text-slate-800">
+        
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl shrink-0">
+            <Lock className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+              Acceso de Administración
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Ingresa con tu documento y contraseña
+            </p>
+          </div>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-4 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Cédula
+            </label>
+            <div className="relative">
+              <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                required
+                placeholder="Número de cédula"
+                value={cedula}
+                onChange={(e) => setCedula(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Contraseña
+            </label>
+            <div className="relative">
+              <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Ingresar como Administrador
+          </button>
+        </form>
+
+        <div className="mt-5 text-center">
+          <p className="text-[11px] text-slate-400">
+            Sesión permanente • Acceso exclusivo para el organizador
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 2. EDIT MATCH MODAL (Scores, Status, Date, Court)
+// ============================================================================
+export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
+  if (!isOpen || !match) return null;
+
+  const [homeTeamId, setHomeTeamId] = useState(match.home_team_id || '');
+  const [awayTeamId, setAwayTeamId] = useState(match.away_team_id || '');
+  const [homeScore, setHomeScore] = useState(match.home_score !== null ? match.home_score : '');
+  const [awayScore, setAwayScore] = useState(match.away_score !== null ? match.away_score : '');
+  const [status, setStatus] = useState(match.status || 'scheduled');
+  const [date, setDate] = useState(match.date || '');
+  const [court, setCourt] = useState(match.court || 'Cancha Principal');
+
+  useEffect(() => {
+    setHomeTeamId(match.home_team_id || '');
+    setAwayTeamId(match.away_team_id || '');
+    setHomeScore(match.home_score !== null ? match.home_score : '');
+    setAwayScore(match.away_score !== null ? match.away_score : '');
+    setStatus(match.status || 'scheduled');
+    setDate(match.date || '');
+    setCourt(match.court || 'Cancha Principal');
+  }, [match]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const updatedMatch = {
+      ...match,
+      home_team_id: homeTeamId || null,
+      away_team_id: awayTeamId || null,
+      home_score: homeScore !== '' ? parseInt(homeScore, 10) : null,
+      away_score: awayScore !== '' ? parseInt(awayScore, 10) : null,
+      status,
+      date,
+      court,
+    };
+
+    onSave(updatedMatch);
+    onClose();
+  };
+
+  const getTeamName = (id, fallback) => {
+    const t = teams.find((item) => item.id === id);
+    return t ? `${t.logo} ${t.name}` : fallback;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800">
+        
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Title */}
+        <div className="mb-5">
+          <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider block">
+            {match.round} {match.group ? `• Grupo ${match.group}` : '• Playoff'}
+          </span>
+          <h2 className="text-xl font-black text-slate-900">Editar Partido / Marcador</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* Teams Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Equipo Local
+              </label>
+              <select
+                value={homeTeamId}
+                onChange={(e) => setHomeTeamId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">{match.home_label || '-- Seleccionar Equipo --'}</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.logo} {t.name} (Grp {t.group})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Equipo Visitante
+              </label>
+              <select
+                value={awayTeamId}
+                onChange={(e) => setAwayTeamId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">{match.away_label || '-- Seleccionar Equipo --'}</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.logo} {t.name} (Grp {t.group})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Scores */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <label className="block text-xs font-black text-slate-700 mb-3 text-center uppercase tracking-wider">
+              Marcador (Goles)
+            </label>
+            <div className="flex items-center justify-center gap-4">
+              <div className="text-center">
+                <span className="block text-xs text-slate-500 font-bold mb-1 truncate max-w-[100px]">
+                  {getTeamName(homeTeamId, match.home_label || 'Local')}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  placeholder="0"
+                  value={homeScore}
+                  onChange={(e) => setHomeScore(e.target.value)}
+                  className="w-16 h-14 bg-white border-2 border-slate-300 rounded-2xl text-center text-2xl font-black text-slate-900 focus:outline-none focus:border-emerald-500 shadow-sm"
+                />
+              </div>
+
+              <span className="text-xl font-bold text-slate-400 self-end pb-3">-</span>
+
+              <div className="text-center">
+                <span className="block text-xs text-slate-500 font-bold mb-1 truncate max-w-[100px]">
+                  {getTeamName(awayTeamId, match.away_label || 'Visitante')}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  placeholder="0"
+                  value={awayScore}
+                  onChange={(e) => setAwayScore(e.target.value)}
+                  className="w-16 h-14 bg-white border-2 border-slate-300 rounded-2xl text-center text-2xl font-black text-slate-900 focus:outline-none focus:border-emerald-500 shadow-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Estado del Partido
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setStatus('scheduled')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  status === 'scheduled'
+                    ? 'bg-blue-50 text-blue-700 border-blue-400 font-black'
+                    : 'bg-white text-slate-600 border-slate-200'
+                }`}
+              >
+                Programado
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatus('live')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  status === 'live'
+                    ? 'bg-red-50 text-red-700 border-red-400 font-black'
+                    : 'bg-white text-slate-600 border-slate-200'
+                }`}
+              >
+                🔴 En Juego
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatus('finished')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  status === 'finished'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-400 font-black'
+                    : 'bg-white text-slate-600 border-slate-200'
+                }`}
+              >
+                ✅ Finalizado
+              </button>
+            </div>
+          </div>
+
+          {/* Date & Court */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Fecha y Hora
+              </label>
+              <input
+                type="text"
+                placeholder="2026-11-15 18:00"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Cancha / Sede
+              </label>
+              <input
+                type="text"
+                placeholder="Cancha Principal"
+                value={court}
+                onChange={(e) => setCourt(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-medium focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          {/* Submit */}
+          <div className="pt-2 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 3. TEAM ROSTER MODAL (Team Name, Logo, 5-12 Players Management)
+// ============================================================================
+export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
+  if (!isOpen || !team) return null;
+
+  const [name, setName] = useState(team.name || '');
+  const [logo, setLogo] = useState(team.logo || '⚽');
+  const [group, setGroup] = useState(team.group || 'A');
+  const [players, setPlayers] = useState(team.players || []);
+
+  const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerNumber, setNewPlayerNumber] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setName(team.name || '');
+    setLogo(team.logo || '⚽');
+    setGroup(team.group || 'A');
+    setPlayers(team.players ? [...team.players] : []);
+    setError('');
+  }, [team]);
+
+  const playerCount = players.length;
+  const isMinMet = playerCount >= 5;
+  const isMaxReached = playerCount >= 12;
+
+  const handleAddPlayer = (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (playerCount >= 12) {
+      setError('No puedes agregar más de 12 jugadores por equipo (límite máximo alcanzado).');
+      return;
+    }
+
+    if (!newPlayerName.trim()) {
+      setError('Ingresa el nombre del jugador.');
+      return;
+    }
+
+    const numberInt = parseInt(newPlayerNumber, 10);
+    if (isNaN(numberInt) || numberInt < 0 || numberInt > 99) {
+      setError('El número de camiseta debe estar entre 0 y 99.');
+      return;
+    }
+
+    if (players.some((p) => p.number === numberInt)) {
+      setError(`Ya existe un jugador con el dorsal #${numberInt}.`);
+      return;
+    }
+
+    const newPlayer = {
+      id: `p-${Date.now()}`,
+      name: newPlayerName.trim(),
+      number: numberInt,
+      goals: 0,
+    };
+
+    setPlayers([...players, newPlayer]);
+    setNewPlayerName('');
+    setNewPlayerNumber('');
+  };
+
+  const handleRemovePlayer = (playerId) => {
+    if (players.length <= 5) {
+      if (!window.confirm('El reglamento exige mínimo 5 jugadores. ¿Deseas eliminarlo de todos modos?')) {
+        return;
+      }
+    }
+    setPlayers(players.filter((p) => p.id !== playerId));
+  };
+
+  const handleAdjustGoals = (playerId, delta) => {
+    setPlayers(
+      players.map((p) => {
+        if (p.id === playerId) {
+          return { ...p, goals: Math.max(0, (p.goals || 0) + delta) };
+        }
+        return p;
+      })
+    );
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('El nombre del equipo no puede estar vacío.');
+      return;
+    }
+
+    if (players.length < 5) {
+      if (!window.confirm(`Este equipo tiene ${players.length} jugadores (mínimo recomendado es 5). ¿Deseas guardar de todos modos?`)) {
+        return;
+      }
+    }
+
+    const updatedTeam = {
+      ...team,
+      name: name.trim(),
+      logo: logo.trim() || '⚽',
+      group,
+      players,
+    };
+
+    onSaveTeam(updatedTeam);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800">
+        
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shadow-sm shrink-0">
+            {logo || '⚽'}
+          </div>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+              Editar Equipo & Plantilla
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Modifica el nombre del equipo y gestiona sus jugadores (Mínimo 5, Máximo 12)
+            </p>
+          </div>
+        </div>
+
+        {/* Error notification */}
+        {error && (
+          <div className="mb-4 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* SECTION 1: TEAM BASIC INFO */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-600">
+              1. Datos del Equipo
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nombre del Equipo
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-bold focus:outline-none focus:border-emerald-500 shadow-xs"
+                  placeholder="Ej: Los Galácticos"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Escudo / Emoji
+                </label>
+                <input
+                  type="text"
+                  value={logo}
+                  onChange={(e) => setLogo(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-center font-bold focus:outline-none focus:border-emerald-500 shadow-xs"
+                  placeholder="⚡, 🔥, 👑"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Grupo en el Torneo
+              </label>
+              <select
+                value={group}
+                onChange={(e) => setGroup(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:border-emerald-500 shadow-xs"
+              >
+                <option value="A">Grupo A</option>
+                <option value="B">Grupo B</option>
+                <option value="C">Grupo C</option>
+                <option value="D">Grupo D</option>
+              </select>
+            </div>
+          </div>
+
+          {/* SECTION 2: ROSTER & PLAYERS */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>2. Plantilla de Jugadores</span>
+              </h3>
+              
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-black px-3 py-1 rounded-full border ${
+                  playerCount < 5
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : playerCount > 12
+                    ? 'bg-red-100 text-red-900 border-red-300'
+                    : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                }`}>
+                  {playerCount} / 12 Jugadores {isMinMet ? '✅' : '⚠️'}
+                </span>
+              </div>
+            </div>
+
+            {!isMinMet && (
+              <p className="text-[11px] font-bold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                ⚠️ Faltan {5 - playerCount} jugador(es) para cumplir el mínimo reglamentario de 5.
+              </p>
+            )}
+
+            {isMaxReached && (
+              <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                ✓ Límite máximo de 12 jugadores alcanzado para este equipo.
+              </p>
+            )}
+
+            {/* Form to add player */}
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-600 block mb-2">
+                Registrar nuevo jugador:
+              </span>
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="Dorsal #"
+                  min="0"
+                  max="99"
+                  disabled={isMaxReached}
+                  value={newPlayerNumber}
+                  onChange={(e) => setNewPlayerNumber(e.target.value)}
+                  className="w-full sm:w-24 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                />
+                <input
+                  type="text"
+                  placeholder="Nombre y Apellido del jugador"
+                  disabled={isMaxReached}
+                  value={newPlayerName}
+                  onChange={(e) => setNewPlayerName(e.target.value)}
+                  className="w-full sm:flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddPlayer}
+                  disabled={isMaxReached}
+                  className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Agregar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* List of registered players */}
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              {players.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-xs font-medium">
+                  No hay jugadores inscritos en este equipo aún.
+                </div>
+              ) : (
+                players.map((p, index) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-all text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 truncate">
+                      <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-800 font-mono font-black text-xs flex items-center justify-center border border-slate-200 shrink-0">
+                        {p.number}
+                      </span>
+                      <div className="truncate">
+                        <span className="font-bold text-slate-900 block truncate">
+                          {p.name}
+                        </span>
+                        {index < 5 && (
+                          <span className="text-[10px] text-emerald-700 font-bold">
+                            Titular
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustGoals(p.id, -1)}
+                          className="w-5 h-5 rounded bg-white hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center border border-slate-200 cursor-pointer"
+                          title="Restar 1 gol"
+                        >
+                          -
+                        </button>
+                        <span className="w-5 text-center font-mono font-bold text-emerald-700 text-xs">
+                          {p.goals || 0}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustGoals(p.id, 1)}
+                          className="w-5 h-5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center cursor-pointer"
+                          title="Sumar 1 gol"
+                        >
+                          +
+                        </button>
+                        <span className="text-[10px] text-slate-400 font-bold ml-0.5 hidden xs:inline">gol(es)</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePlayer(p.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Eliminar jugador"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              Guardar Equipo y Plantilla
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+  );
+}

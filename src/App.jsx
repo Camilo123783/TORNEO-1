@@ -1,16 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
-import GroupStandings from './components/GroupStandings';
-import MatchesList from './components/MatchesList';
-import PlayoffBracket from './components/PlayoffBracket';
-import TeamsList from './components/TeamsList';
-import TopScorers from './components/TopScorers';
 import AdminPanel from './components/AdminPanel';
-import SecretAdminModal from './components/SecretAdminModal';
-import EditMatchModal from './components/EditMatchModal';
-import TeamRosterModal from './components/TeamRosterModal';
-import { INITIAL_TEAMS, INITIAL_MATCHES } from './data/initialData';
-import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
+import { 
+  GroupStandings, 
+  MatchesList, 
+  PlayoffBracket, 
+  TeamsList, 
+  TopScorers 
+} from './components/TournamentViews';
+import { 
+  SecretAdminModal, 
+  EditMatchModal, 
+  TeamRosterModal 
+} from './components/Modals';
+import { 
+  INITIAL_TEAMS, 
+  INITIAL_MATCHES, 
+  supabase, 
+  isSupabaseConfigured 
+} from './tournamentData';
 import { Lock, Trophy, RefreshCw, X } from 'lucide-react';
 
 export default function App() {
@@ -246,16 +254,17 @@ export default function App() {
       
       {/* High-Visibility Admin Banner (Visible en todo momento en modo admin) */}
       {isAdmin && (
-        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-4 shadow-sm flex items-center justify-between sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <span className="p-1 bg-white/20 rounded">⚡</span>
-            <span>MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores, nombres de equipos y jugadores</span>
+        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-3 sm:px-4 shadow-sm flex items-center justify-between sticky top-0 z-50 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="p-1 bg-white/20 rounded shrink-0">⚡</span>
+            <span className="hidden sm:inline truncate">MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores, nombres de equipos y jugadores</span>
+            <span className="sm:hidden font-black truncate">ADMINISTRADOR ACTIVO</span>
           </div>
           <button 
             onClick={handleLogout}
-            className="bg-black/20 hover:bg-black/35 text-white text-xs font-bold px-3 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+            className="bg-black/20 hover:bg-black/35 text-white text-xs font-bold px-2.5 sm:px-3 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
           >
-            <span>Salir de Admin</span>
+            <span>Salir</span>
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -273,7 +282,7 @@ export default function App() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
         
         {/* Tab 1: Group Standings */}
         {activeTab === 'groups' && (

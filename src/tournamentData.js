@@ -1,3 +1,122 @@
+import { createClient } from '@supabase/supabase-js';
+
+// ==========================================
+// SUPABASE CLIENT & CONFIGURATION
+// ==========================================
+const supabaseUrl = 
+  import.meta.env.VITE_SUPABASE_URL || 
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL || 
+  import.meta.env.SUPABASE_URL || 
+  '';
+
+const supabaseAnonKey = 
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 
+  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
+  import.meta.env.SUPABASE_ANON_KEY || 
+  '';
+
+export const isSupabaseConfigured = () => {
+  return Boolean(
+    supabaseUrl && 
+    supabaseAnonKey && 
+    supabaseUrl !== 'https://tu-proyecto.supabase.co' &&
+    supabaseAnonKey !== 'PEGA_AQUI_TU_ANON_KEY' &&
+    supabaseAnonKey !== supabaseUrl &&
+    supabaseUrl.startsWith('https://')
+  );
+};
+
+export const supabase = isSupabaseConfigured()
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+// ==========================================
+// STANDINGS CALCULATOR (MICROFÚTBOL RULES)
+// 3 pts Win, 1 pt Draw, 0 pt Loss
+// Tiebreakers: PTS > DG > GF > Fewest GC > Name
+// ==========================================
+export function calculateGroupStandings(teams, matches, groupKey) {
+  const groupTeams = teams.filter(t => t.group === groupKey);
+
+  const statsMap = {};
+  groupTeams.forEach(t => {
+    statsMap[t.id] = {
+      team: t,
+      pj: 0,
+      pg: 0,
+      pe: 0,
+      pp: 0,
+      gf: 0,
+      gc: 0,
+      dg: 0,
+      pts: 0,
+      form: []
+    };
+  });
+
+  const finishedGroupMatches = matches.filter(
+    m => m.group === groupKey && 
+         m.status === 'finished' && 
+         m.home_score !== null && 
+         m.away_score !== null &&
+         statsMap[m.home_team_id] && 
+         statsMap[m.away_team_id]
+  );
+
+  finishedGroupMatches.forEach(m => {
+    const home = statsMap[m.home_team_id];
+    const away = statsMap[m.away_team_id];
+
+    home.pj += 1;
+    away.pj += 1;
+    home.gf += Number(m.home_score);
+    home.gc += Number(m.away_score);
+    away.gf += Number(m.away_score);
+    away.gc += Number(m.home_score);
+
+    if (m.home_score > m.away_score) {
+      home.pg += 1;
+      home.pts += 3;
+      home.form.push('W');
+      away.pp += 1;
+      away.form.push('L');
+    } else if (m.home_score < m.away_score) {
+      away.pg += 1;
+      away.pts += 3;
+      away.form.push('W');
+      home.pp += 1;
+      home.form.push('L');
+    } else {
+      home.pe += 1;
+      away.pe += 1;
+      home.pts += 1;
+      away.pts += 1;
+      home.form.push('D');
+      away.form.push('D');
+    }
+  });
+
+  Object.values(statsMap).forEach(stat => {
+    stat.dg = stat.gf - stat.gc;
+  });
+
+  const standings = Object.values(statsMap);
+  standings.sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if (b.dg !== a.dg) return b.dg - a.dg;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    if (a.gc !== b.gc) return a.gc - b.gc;
+    return a.team.name.localeCompare(b.team.name);
+  });
+
+  return standings;
+}
+
+// ==========================================
+// 12 TEAMS (4 GROUPS OF 3, 5-12 PLAYERS)
+// ==========================================
 export const INITIAL_TEAMS = [
   // Grupo A
   { 
@@ -176,6 +295,9 @@ export const INITIAL_TEAMS = [
   },
 ];
 
+// ==========================================
+// TOURNAMENT FIXTURES & MATCHES
+// ==========================================
 export const INITIAL_MATCHES = [
   // GRUPO A
   {
