@@ -30,9 +30,41 @@ import {
 export function GroupStandings({ teams, matches }) {
   const [selectedGroup, setSelectedGroup] = useState('ALL');
   const groups = ['A', 'B', 'C', 'D'];
+  const liveMatches = matches.filter((m) => m.status === 'live');
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
+      {/* Live matches ticker banner if any match is in play */}
+      {liveMatches.length > 0 && (
+        <div className="p-3 sm:p-4 rounded-2xl bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+            </span>
+            <span className="font-black text-xs sm:text-sm text-red-700 dark:text-red-300 uppercase tracking-wide">
+              {liveMatches.length === 1 ? 'Partido En Vivo Ahora' : `${liveMatches.length} Partidos En Vivo Ahora`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+            {liveMatches.map((m) => {
+              const h = teams.find((t) => t.id === m.home_team_id);
+              const a = teams.find((t) => t.id === m.away_team_id);
+              return (
+                <div key={m.id} className="flex items-center gap-2 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-red-200 dark:border-red-900/60 shadow-xs whitespace-nowrap text-xs">
+                  <span className="font-bold text-slate-800 dark:text-zinc-200">{h ? h.name : 'Local'}</span>
+                  <span className="font-mono font-black text-white bg-red-600 px-2 py-0.5 rounded-md text-xs">
+                    {m.home_score !== null ? m.home_score : 0} - {m.away_score !== null ? m.away_score : 0}
+                  </span>
+                  <span className="font-bold text-slate-800 dark:text-zinc-200">{a ? a.name : 'Visitante'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Header and Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-zinc-800">
         <div>
@@ -302,6 +334,19 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
             >
               Todos
             </button>
+            {matches.some((m) => m.status === 'live') && (
+              <button
+                onClick={() => setFilterStatus('live')}
+                className={`px-2.5 py-0.5 rounded-md transition-colors cursor-pointer flex items-center gap-1 font-bold ${
+                  filterStatus === 'live'
+                    ? 'bg-red-600 text-white animate-pulse'
+                    : 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                <span>En Vivo ({matches.filter((m) => m.status === 'live').length})</span>
+              </button>
+            )}
             <button
               onClick={() => setFilterStatus('finished')}
               className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
@@ -340,7 +385,11 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
             return (
               <div
                 key={m.id}
-                className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 rounded-2xl p-3.5 sm:p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden w-full max-w-full"
+                className={`bg-white dark:bg-zinc-950 border rounded-2xl p-3.5 sm:p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden w-full max-w-full ${
+                  m.status === 'live'
+                    ? 'border-red-500/80 dark:border-red-500/70 ring-2 ring-red-500/25 shadow-md shadow-red-500/10'
+                    : 'border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700'
+                }`}
               >
                 {/* Header row: round & status */}
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400 pb-2.5 mb-2.5 border-b border-slate-100 dark:border-zinc-800/80 gap-2">

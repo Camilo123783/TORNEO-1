@@ -299,34 +299,43 @@ export default function App() {
 
   // Guardar goles de jugadores directamente en Supabase (tabla 'players' y 'teams')
   const handleUpdatePlayerGoals = async (teamId, playerId, delta) => {
-    let newGoals = 0;
-    setTeams((prev) => {
-      let updatedTeam = null;
-      const nextTeams = prev.map((team) => {
+    // 1. Obtener goles actuales de forma síncrona
+    const currentTeam = teams.find((t) => t.id === teamId);
+    const currentPlayer = (currentTeam?.players || []).find((p) => p.id === playerId);
+    const currentGoals = currentPlayer ? (currentPlayer.goals || 0) : 0;
+    const newGoals = Math.max(0, currentGoals + delta);
+
+    // 2. Actualizar estado local inmediatamente
+    let updatedPlayersList = null;
+    setTeams((prev) =>
+      prev.map((team) => {
         if (team.id === teamId) {
-          const updatedPlayers = (team.players || []).map((p) => {
-            if (p.id === playerId) {
-              newGoals = Math.max(0, (p.goals || 0) + delta);
-              return { ...p, goals: newGoals };
-            }
-            return p;
-          });
-          updatedTeam = { ...team, players: updatedPlayers };
-          return updatedTeam;
+          updatedPlayersList = (team.players || []).map((p) =>
+            p.id === playerId ? { ...p, goals: newGoals } : p
+          );
+          return { ...team, players: updatedPlayersList };
         }
         return team;
-      });
+      })
+    );
 
-      if (updatedTeam) {
-        handleSaveTeam(updatedTeam);
-      }
-      return nextTeams;
-    });
-
+    // 3. Guardar en Supabase en ambas tablas (players y teams)
     if (isConnected && supabase) {
       try {
-        await supabase.from('players').update({ goals: newGoals }).eq('id', playerId);
-      } catch (err) {}
+        await supabase
+          .from('players')
+          .update({ goals: newGoals })
+          .eq('id', playerId);
+
+        if (updatedPlayersList) {
+          await supabase
+            .from('teams')
+            .update({ players: updatedPlayersList })
+            .eq('id', teamId);
+        }
+      } catch (err) {
+        console.error('Error al actualizar goles en Supabase:', err);
+      }
     }
   };
 
@@ -369,38 +378,27 @@ export default function App() {
 
     if (isConnected && supabase) {
       try {
-        // Restablecer jugadores a 0 goles en Supabase
+        // 1. Restablecer todos los jugadores a 0 goles en Supabase en 1 llamada rápida
+        await supabase
+          .from('players')
+          .update({ goals: 0 })
+          .gte('goals', 0);
+
+        // 2. Restablecer todos los partidos en bloque
+        await supabase
+          .from('matches')
+          .upsert(resetMatches);
+
+        // 3. Sincronizar campo players en teams
         for (const t of resetTeams) {
-          if (Array.isArray(t.players)) {
-            for (const p of t.players) {
-              try {
-                await supabase
-                  .from('players')
-                  .update({ goals: 0 })
-                  .eq('id', p.id);
-              } catch (e) {}
-            }
-          }
+          try {
+            await supabase
+              .from('teams')
+              .update({ players: t.players })
+              .eq('id', t.id);
+          } catch (e) {}
         }
 
-        // Restablecer todos los partidos a scheduled y marcadores null en Supabase
-        for (const m of resetMatches) {
-          await supabase.from('matches').upsert({
-            id: m.id,
-            round: m.round,
-            phase: m.phase,
-            group: m.group,
-            bracket_code: m.bracket_code,
-            home_label: m.home_label,
-            away_label: m.away_label,
-            home_team_id: m.home_team_id,
-            away_team_id: m.away_team_id,
-            home_score: null,
-            away_score: null,
-            status: 'scheduled',
-            date: m.date,
-          });
-        }
         await fetchData(true);
       } catch (err) {
         console.error('Error al reiniciar base de datos en Supabase:', err);
