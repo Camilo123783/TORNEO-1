@@ -135,9 +135,6 @@ export default function Header({
               <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white uppercase truncate">
                 Microfútbol <span className="text-emerald-500">Tunja</span>
               </h1>
-              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 font-medium truncate">
-                4 Grupos • 5 a 12 jugadores
-              </p>
             </div>
           </div>
 

@@ -79,9 +79,6 @@ export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
             <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
               Acceso de Administración
             </h2>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-              Ingresa con tu documento y contraseña (números)
-            </p>
           </div>
         </div>
 
@@ -96,7 +93,7 @@ export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Cédula (Solo números)
+              Cédula
             </label>
             <div className="relative">
               <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
@@ -105,7 +102,6 @@ export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 required
-                placeholder="Ej: 7530"
                 value={cedula}
                 onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
                 className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold font-mono"
@@ -115,7 +111,7 @@ export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Contraseña (Solo números)
+              Contraseña
             </label>
             <div className="relative">
               <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
@@ -137,15 +133,9 @@ export function SecretAdminModal({ isOpen, onClose, onLoginSuccess }) {
             className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
-            Ingresar como Administrador
+            Ingresar
           </button>
         </form>
-
-        <div className="mt-5 text-center">
-          <p className="text-[11px] text-slate-400 dark:text-zinc-500">
-            Sesión permanente • Acceso exclusivo para el organizador
-          </p>
-        </div>
       </div>
     </div>
   );
@@ -163,7 +153,6 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
   const [awayScore, setAwayScore] = useState(match.away_score !== null ? match.away_score : '');
   const [status, setStatus] = useState(match.status || 'scheduled');
   const [date, setDate] = useState(match.date || '');
-  const [court, setCourt] = useState(match.court || 'Cancha Principal');
 
   useEffect(() => {
     setHomeTeamId(match.home_team_id || '');
@@ -172,7 +161,6 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
     setAwayScore(match.away_score !== null ? match.away_score : '');
     setStatus(match.status || 'scheduled');
     setDate(match.date || '');
-    setCourt(match.court || 'Cancha Principal');
   }, [match]);
 
   const handleSubmit = (e) => {
@@ -186,7 +174,6 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
       away_score: awayScore !== '' ? parseInt(awayScore, 10) : null,
       status,
       date,
-      court,
     };
 
     onSave(updatedMatch);
@@ -341,32 +328,18 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
             </div>
           </div>
 
-          {/* Date & Court */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
-                Fecha y Hora
-              </label>
-              <input
-                type="text"
-                placeholder="2026-11-15 18:00"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
-                Cancha / Sede
-              </label>
-              <input
-                type="text"
-                placeholder="Cancha Principal"
-                value={court}
-                onChange={(e) => setCourt(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:border-emerald-500"
-              />
-            </div>
+          {/* Date */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
+              Fecha y Hora
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: 2026-11-15 18:00"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white font-medium focus:outline-none focus:border-emerald-500"
+            />
           </div>
 
           {/* Submit */}

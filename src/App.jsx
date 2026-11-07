@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
 import AdminPanel from './components/AdminPanel';
 import { 
@@ -73,9 +73,16 @@ export default function App() {
     localStorage.setItem('torneo_microfutbol_matches', JSON.stringify(matches));
   }, [matches]);
 
+  const lastLocalEditRef = useRef(0);
+
   // Fast fetch data function (used for initial load, polling, and manual refresh)
   const fetchData = useCallback(async (showLoading = false) => {
     if (!isConnected || !supabase) return;
+
+    // Do not overwrite local edits if the user made changes within the last 6 seconds
+    if (!showLoading && Date.now() - lastLocalEditRef.current < 6000) {
+      return;
+    }
 
     if (showLoading) setIsRefreshing(true);
     try {
@@ -105,7 +112,24 @@ export default function App() {
         .order('date');
 
       if (!matchesErr && matchesData && matchesData.length > 0) {
-        setMatches(matchesData);
+        setMatches((prevMatches) => {
+          return prevMatches.map((local) => {
+            const remote = matchesData.find((m) => m.id === local.id);
+            if (!remote) return local;
+
+            // If a recent local change occurred and Supabase has not yet updated (e.g. pending RLS policy), keep local
+            if (Date.now() - lastLocalEditRef.current < 120000 && local.status !== remote.status) {
+              return local;
+            }
+            return {
+              ...local,
+              ...remote,
+              // If local score was recently modified, don't revert to null or stale
+              home_score: local.home_score !== null && remote.home_score === null ? local.home_score : remote.home_score,
+              away_score: local.away_score !== null && remote.away_score === null ? local.away_score : remote.away_score,
+            };
+          });
+        });
       }
     } catch (err) {
       console.error('Error al sincronizar datos:', err);
@@ -155,23 +179,45 @@ export default function App() {
 
   // Handle Save Single Match (0ms optimistic state update + Supabase sync)
   const handleSaveMatch = async (updatedMatch) => {
-    setMatches((prev) => prev.map((m) => (m.id === updatedMatch.id ? updatedMatch : m)));
+    lastLocalEditRef.current = Date.now();
+
+    const cleanMatch = {
+      ...updatedMatch,
+      home_score: updatedMatch.home_score !== '' && updatedMatch.home_score !== null && !isNaN(updatedMatch.home_score)
+        ? Number(updatedMatch.home_score)
+        : null,
+      away_score: updatedMatch.away_score !== '' && updatedMatch.away_score !== null && !isNaN(updatedMatch.away_score)
+        ? Number(updatedMatch.away_score)
+        : null,
+    };
+
+    setMatches((prev) => {
+      const next = prev.map((m) => (m.id === cleanMatch.id ? cleanMatch : m));
+      localStorage.setItem('torneo_microfutbol_matches', JSON.stringify(next));
+      return next;
+    });
 
     if (isConnected && supabase) {
       try {
-        await supabase
+        const { data, error } = await supabase
           .from('matches')
           .update({
-            home_team_id: updatedMatch.home_team_id,
-            away_team_id: updatedMatch.away_team_id,
-            home_score: updatedMatch.home_score,
-            away_score: updatedMatch.away_score,
-            status: updatedMatch.status,
-            date: updatedMatch.date,
-            court: updatedMatch.court,
+            home_team_id: cleanMatch.home_team_id,
+            away_team_id: cleanMatch.away_team_id,
+            home_score: cleanMatch.home_score,
+            away_score: cleanMatch.away_score,
+            status: cleanMatch.status,
+            date: cleanMatch.date,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', updatedMatch.id);
+          .eq('id', cleanMatch.id)
+          .select();
+
+        if (error) {
+          console.warn('Error al actualizar en Supabase:', error.message);
+        } else if (!data || data.length === 0) {
+          console.warn('Supabase no actualizó filas. Es necesario desactivar RLS o dar permisos públicos.');
+        }
       } catch (err) {
         console.error('Error al guardar partido en Supabase:', err);
       }

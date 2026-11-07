@@ -118,7 +118,7 @@ export default function AdminPanel({
           ...m,
           home_score: currentHome,
           away_score: currentAway,
-          status: 'finished',
+          status: m.status === 'scheduled' ? 'live' : m.status,
         };
         return updatedMatch;
       }
@@ -129,6 +129,30 @@ export default function AdminPanel({
     if (updatedMatch && onSaveSingleMatch) {
       onSaveSingleMatch(updatedMatch);
     }
+  };
+
+  // Direct status updater
+  const handleStatusChange = (matchId, newStatus) => {
+    let updatedMatch = null;
+    const updated = matches.map((m) => {
+      if (m.id === matchId) {
+        updatedMatch = {
+          ...m,
+          status: newStatus,
+          home_score: m.home_score !== null ? m.home_score : 0,
+          away_score: m.away_score !== null ? m.away_score : 0,
+        };
+        return updatedMatch;
+      }
+      return m;
+    });
+
+    setMatches(updated);
+    if (updatedMatch && onSaveSingleMatch) {
+      onSaveSingleMatch(updatedMatch);
+    }
+    const label = newStatus === 'finished' ? 'Finalizado' : newStatus === 'live' ? 'En Vivo' : 'Programado';
+    showNotification(`Estado del partido actualizado a: ${label}`);
   };
 
   const getTeam = (teamId) => teams.find((t) => t.id === teamId);
@@ -255,19 +279,50 @@ export default function AdminPanel({
                       {m.round} {m.group ? `(Grupo ${m.group})` : `(${m.bracket_code || 'Playoff'})`}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
-                        m.status === 'finished'
-                          ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
-                          : m.status === 'live'
-                          ? 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 animate-pulse'
-                          : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
-                      }`}>
-                        {m.status === 'finished' ? 'Final' : m.status === 'live' ? 'Vivo' : 'Próx'}
-                      </span>
+                      {/* Direct 1-Click Status Selector */}
+                      <div className="flex items-center gap-0.5 p-0.5 bg-slate-100 dark:bg-zinc-900 rounded-lg border border-slate-200 dark:border-zinc-800 text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(m.id, 'scheduled')}
+                          title="Marcar como Programado"
+                          className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                            m.status === 'scheduled'
+                              ? 'bg-blue-600 text-white shadow-2xs font-extrabold'
+                              : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
+                          }`}
+                        >
+                          Próx
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(m.id, 'live')}
+                          title="Marcar como En Juego"
+                          className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                            m.status === 'live'
+                              ? 'bg-red-600 text-white shadow-2xs font-extrabold animate-pulse'
+                              : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
+                          }`}
+                        >
+                          🔴 Vivo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(m.id, 'finished')}
+                          title="Marcar como Finalizado"
+                          className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                            m.status === 'finished'
+                              ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                              : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
+                          }`}
+                        >
+                          ✅ Final
+                        </button>
+                      </div>
+
                       <button
                         onClick={() => onEditMatch(m)}
                         className="p-1 rounded-md text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-                        title="Editar partido completo"
+                        title="Editar partido completo (equipos, fecha)"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
@@ -414,7 +469,7 @@ export default function AdminPanel({
             <form onSubmit={handleSaveCredentials} className="space-y-3 max-w-md">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
-                  Cédula de Administrador (Solo números)
+                  Cédula de Administrador
                 </label>
                 <div className="relative">
                   <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
@@ -433,7 +488,7 @@ export default function AdminPanel({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
-                  Contraseña de Administrador (Solo números)
+                  Contraseña de Administrador
                 </label>
                 <div className="relative">
                   <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />

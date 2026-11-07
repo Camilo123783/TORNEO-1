@@ -92,9 +92,6 @@ export function GroupStandings({ teams, matches }) {
                       <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">3 Equipos</p>
                     </div>
                   </div>
-                  <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    2 a Cuartos
-                  </span>
                 </div>
 
                 {/* Table with responsive horizontal scrolling container */}
@@ -422,16 +419,14 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
                 </div>
 
                 {/* Match Metadata */}
-                <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                  <span className="flex items-center gap-1 truncate">
-                    <Clock className="w-3 h-3 text-slate-400 dark:text-zinc-500 shrink-0" />
-                    <span className="truncate">{m.date || 'TBD'}</span>
-                  </span>
-                  <span className="flex items-center gap-1 truncate ml-2">
-                    <MapPin className="w-3 h-3 text-slate-400 dark:text-zinc-500 shrink-0" />
-                    <span className="truncate">{m.court || 'Cancha'}</span>
-                  </span>
-                </div>
+                {m.date && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800/80 flex items-center text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
+                    <span className="flex items-center gap-1 truncate">
+                      <Clock className="w-3 h-3 text-slate-400 dark:text-zinc-500 shrink-0" />
+                      <span className="truncate">{m.date}</span>
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -543,10 +538,12 @@ export function PlayoffBracket({ teams, matches, isAdmin, onEditMatch }) {
           </span>
         </div>
 
-        <div className="mt-2 text-[10px] text-slate-400 dark:text-zinc-500 font-medium flex justify-between">
-          <span>{m.date || 'TBD'}</span>
-          <span>{m.court || 'Cancha'}</span>
-        </div>
+        {m.date && (
+          <div className="mt-2 text-[10px] text-slate-400 dark:text-zinc-500 font-medium flex items-center gap-1">
+            <Clock className="w-2.5 h-2.5 text-slate-400 dark:text-zinc-500 shrink-0" />
+            <span>{m.date}</span>
+          </div>
+        )}
       </div>
     );
   };
