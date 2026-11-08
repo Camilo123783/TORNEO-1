@@ -29,6 +29,7 @@ export default function AdminPanel({
   onEditMatch, 
   onEditTeam,
   onResetTournament,
+  onClearTeamsAndPlayers,
   onSaveSingleMatch,
   onUpdatePlayerGoals,
   adminCedula = '7530',
@@ -741,34 +742,66 @@ export default function AdminPanel({
             </form>
           </div>
 
-          {/* Reset tournament */}
-          <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm transition-colors">
-            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white mb-1">Zona de Peligro</h3>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 mb-3">Acciones irreversibles para reiniciar el torneo.</p>
+          {/* Reset tournament / Danger Zone */}
+          <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm transition-colors space-y-4">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white mb-1">Zona de Peligro</h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">Acciones administrativas irreversibles para reiniciar datos del torneo.</p>
+            </div>
 
-            <div className="p-3.5 sm:p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Opción 1: Reiniciar Resultados */}
+            <div className="p-3.5 sm:p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h4 className="text-xs sm:text-sm font-bold text-red-800 dark:text-red-300">Reiniciar Torneo a Estado Inicial</h4>
-                <p className="text-[11px] text-red-600/90 dark:text-red-400 font-medium">
-                  Restablece todos los marcadores y los 12 equipos a los valores iniciales.
+                <h4 className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-300">Reiniciar Solo Resultados y Marcadores</h4>
+                <p className="text-[11px] text-amber-700/90 dark:text-amber-400 font-medium">
+                  Vuelve todos los partidos a estado programado (0-0), limpia la tabla de goleadores y tarjetas, conservando los nombres y nóminas de tus equipos.
                 </p>
               </div>
               <button
                 onClick={() => {
                   setConfirmConfig({
-                    title: '¿Reiniciar Torneo a Estado Inicial?',
-                    message: 'Se restablecerán todos los marcadores y los 12 equipos a los valores iniciales.\n\n¿Estás seguro?',
-                    confirmText: 'Reiniciar Torneo',
+                    title: '¿Reiniciar Marcadores y Resultados?',
+                    message: 'Se pondrán todos los marcadores en 0-0 y los goles de jugadores en 0. Los nombres y nóminas de los equipos se conservarán.\n\n¿Estás seguro?',
+                    confirmText: 'Reiniciar Resultados',
                     isDanger: true,
                     onConfirm: () => {
-                      onResetTournament();
-                      showNotification('El torneo ha sido reiniciado.');
+                      if (onResetTournament) onResetTournament();
+                      showNotification('Marcadores y resultados reiniciados exitosamente.');
+                    },
+                  });
+                }}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shrink-0 transition-colors cursor-pointer text-center"
+              >
+                Reiniciar Resultados
+              </button>
+            </div>
+
+            {/* Opción 2: Eliminar todos los datos de equipos y jugadores */}
+            <div className="p-3.5 sm:p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-red-800 dark:text-red-300">Eliminar Todos los Equipos y Jugadores</h4>
+                <p className="text-[11px] text-red-600/90 dark:text-red-400 font-medium">
+                  Borra todos los jugadores inscritos y restablece los 12 equipos a plantillas limpias ("Equipo 1" .. "Equipo 12") para iniciar un torneo nuevo desde cero.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setConfirmConfig({
+                    title: '¿Eliminar Todos los Equipos y Jugadores?',
+                    message: '⚠️ Esta acción borrará todos los jugadores inscritos de la base de datos y restablecerá los 12 equipos a plantillas limpias (Equipo 1 .. Equipo 12) listas para que ingreses tus equipos y jugadores reales.\n\n¿Deseas continuar?',
+                    confirmText: 'Sí, Eliminar Todo',
+                    isDanger: true,
+                    onConfirm: () => {
+                      if (onClearTeamsAndPlayers) {
+                        onClearTeamsAndPlayers();
+                        showNotification('¡Todos los datos de equipos y jugadores han sido eliminados!');
+                      }
                     },
                   });
                 }}
                 className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shrink-0 transition-colors cursor-pointer text-center"
               >
-                Reiniciar Torneo
+                Eliminar Equipos y Jugadores
               </button>
             </div>
           </div>

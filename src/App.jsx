@@ -458,6 +458,55 @@ export default function App() {
     }
   };
 
+  // Eliminar todos los datos de equipos y jugadores (dejar plantillas limpias listas para el usuario)
+  const handleClearAllTeamsAndPlayers = async () => {
+    const cleanTeams = INITIAL_TEAMS;
+    const cleanMatches = INITIAL_MATCHES.map((m) => ({
+      ...m,
+      home_score: null,
+      away_score: null,
+      status: 'scheduled',
+      home_team_id: m.phase === 'playoffs' ? null : m.home_team_id,
+      away_team_id: m.phase === 'playoffs' ? null : m.away_team_id,
+    }));
+
+    setTeams(cleanTeams);
+    setMatches(cleanMatches);
+    setCards([]);
+
+    if (isConnected && supabase) {
+      try {
+        // 1. Eliminar todos los jugadores registrados de Supabase
+        await supabase.from('players').delete().neq('id', 'none');
+
+        // 2. Eliminar todas las tarjetas disciplinarias
+        await supabase.from('cards').delete().neq('id', 'none');
+
+        // 3. Restablecer los 12 equipos con nombres plantilla 'Equipo 1'..'Equipo 12' y 0 jugadores
+        for (const t of cleanTeams) {
+          try {
+            await supabase
+              .from('teams')
+              .update({
+                name: t.name,
+                logo: t.logo,
+                color: t.color,
+                group: t.group,
+              })
+              .eq('id', t.id);
+          } catch (e) {}
+        }
+
+        // 4. Restablecer los partidos a estado programado
+        await supabase.from('matches').upsert(cleanMatches);
+
+        await fetchData(true);
+      } catch (err) {
+        console.error('Error al vaciar equipos y jugadores en Supabase:', err);
+      }
+    }
+  };
+
   // Handle Login / Logout
   const handleLoginSuccess = () => {
     setIsAdmin(true);
@@ -578,6 +627,7 @@ export default function App() {
             onEditMatch={(m) => setEditingMatch(m)}
             onEditTeam={(team) => setEditingTeam(team)}
             onResetTournament={handleResetTournament}
+            onClearTeamsAndPlayers={handleClearAllTeamsAndPlayers}
             onUpdatePlayerGoals={handleUpdatePlayerGoals}
             adminCedula={adminCedula}
             adminPassword={adminPassword}
