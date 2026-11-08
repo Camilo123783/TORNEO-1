@@ -27,6 +27,7 @@ import {
   getResolvedPlayoffMatches, 
   getResolvedPlayoffMatch 
 } from '../tournamentData';
+import { ConfirmModal } from './Modals';
 
 // ============================================================================
 // 1. GROUP STANDINGS (Tablas de Posiciones Grupos A, B, C, D)
@@ -1330,6 +1331,7 @@ export function CardsView({ teams = [], matches = [], cards = [], isAdmin = fals
   const [filterTeam, setFilterTeam] = useState('ALL');
   const [filterType, setFilterType] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [cardToDelete, setCardToDelete] = useState(null);
 
   // 1. Identificar suspensiones activas para el siguiente partido de cada equipo
   const suspendedList = [];
@@ -1370,12 +1372,17 @@ export function CardsView({ teams = [], matches = [], cards = [], isAdmin = fals
   const activeSuspensions = suspendedList.filter((s) => !s.isServed);
 
   // 2. Ranking de Juego Limpio / Fair Play (12 Equipos)
+  // Criterio solicitado por el usuario:
+  // - Equipos CON tarjetas registradas van al INICIO de la tabla (más penalizados primero)
+  // - Equipos SIN tarjetas (0 tarjetas) van después, ordenados por Grupo (A, B, C, D) y alfabéticamente
+  // - Si ningún equipo tiene tarjetas, la tabla entera se muestra ordenada por Grupo (A, B, C, D) y alfabéticamente
   const fairPlayRanking = teams
     .map((team) => {
       const teamCards = (cards || []).filter((c) => c.team_id === team.id);
       const yellowCards = teamCards.filter((c) => c.card_type === 'yellow').length;
       const redCards = teamCards.filter((c) => c.card_type === 'red' || c.card_type === 'double_yellow').length;
       const fairPlayPoints = yellowCards * 1 + redCards * 3;
+      const hasCards = yellowCards > 0 || redCards > 0;
 
       return {
         team,
@@ -1383,11 +1390,25 @@ export function CardsView({ teams = [], matches = [], cards = [], isAdmin = fals
         redCards,
         totalCards: yellowCards + redCards,
         fairPlayPoints,
+        hasCards,
       };
     })
     .sort((a, b) => {
-      if (a.fairPlayPoints !== b.fairPlayPoints) return a.fairPlayPoints - b.fairPlayPoints;
-      if (a.redCards !== b.redCards) return a.redCards - b.redCards;
+      // 1. Equipos con tarjetas al inicio de la tabla
+      if (a.hasCards && !b.hasCards) return -1;
+      if (!a.hasCards && b.hasCards) return 1;
+
+      // 2. Si ambos tienen tarjetas: mayor penalización primero (más puntos, más rojas, más amarillas)
+      if (a.hasCards && b.hasCards) {
+        if (b.fairPlayPoints !== a.fairPlayPoints) return b.fairPlayPoints - a.fairPlayPoints;
+        if (b.redCards !== a.redCards) return b.redCards - a.redCards;
+        if (b.yellowCards !== a.yellowCards) return b.yellowCards - a.yellowCards;
+        if (a.team.group !== b.team.group) return a.team.group.localeCompare(b.team.group);
+        return a.team.name.localeCompare(b.team.name);
+      }
+
+      // 3. Si ninguno tiene tarjetas (0 tarjetas): Grupo (A, B, C, D) como primer criterio, luego alfabéticamente
+      if (a.team.group !== b.team.group) return a.team.group.localeCompare(b.team.group);
       return a.team.name.localeCompare(b.team.name);
     });
 
@@ -1561,7 +1582,7 @@ export function CardsView({ teams = [], matches = [], cards = [], isAdmin = fals
               <span>🏆 Tabla de Juego Limpio (Fair Play)</span>
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-              Menos puntos de penalización = Mejor posición de desempate en fase de grupos
+              Equipos con amonestaciones y expulsiones al inicio de la tabla. Equipos con 0 tarjetas ordenados por Grupo (A-D) y alfabéticamente.
             </p>
           </div>
         </div>
@@ -1736,9 +1757,12 @@ export function CardsView({ teams = [], matches = [], cards = [], isAdmin = fals
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`¿Deseas eliminar la tarjeta de ${pInfo.playerName}?`)) {
-                            onDeleteCard(card.id);
-                          }
+                          setCardToDelete({
+                            id: card.id,
+                            playerName: pInfo.playerName,
+                            teamName: pInfo.teamName,
+                            cardType: isDoubleYellow ? 'Doble Amarilla' : isRed ? 'Roja Directa' : 'Tarjeta Amarilla',
+                          });
                         }}
                         className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors cursor-pointer"
                         title="Eliminar tarjeta (Modo Admin)"
@@ -1753,6 +1777,24 @@ export function CardsView({ teams = [], matches = [], cards = [], isAdmin = fals
           </div>
         )}
       </div>
+
+      {/* Modal de Confirmación Moderno (Directo en la App, sin alertas nativas del navegador) */}
+      <ConfirmModal
+        isOpen={Boolean(cardToDelete)}
+        title="¿Eliminar Tarjeta?"
+        message={`¿Estás seguro de que deseas anular y eliminar la tarjeta (${cardToDelete?.cardType}) de ${cardToDelete?.playerName} (${cardToDelete?.teamName})?\n\nSe recalcularán de inmediato la tabla de Fair Play y las suspensiones del torneo.`}
+        confirmText="Eliminar Tarjeta"
+        cancelText="Cancelar"
+        isDanger={true}
+        icon="🗑️"
+        onConfirm={() => {
+          if (cardToDelete) {
+            onDeleteCard(cardToDelete.id);
+            setCardToDelete(null);
+          }
+        }}
+        onClose={() => setCardToDelete(null)}
+      />
 
     </div>
   );

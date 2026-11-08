@@ -478,7 +478,7 @@ export default function App() {
       
       {/* High-Visibility Admin Banner (Visible en todo momento en modo admin) */}
       {isAdmin && (
-        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-3 sm:px-4 shadow-sm flex items-center justify-between sticky top-0 z-30 gap-2">
+        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-3 sm:px-4 shadow-sm flex items-center justify-between sticky top-0 z-20 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="p-1 bg-white/20 rounded shrink-0">⚡</span>
             <span className="hidden sm:inline truncate">MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores, nombres de equipos y jugadores</span>

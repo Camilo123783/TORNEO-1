@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   Save, 
@@ -16,6 +17,25 @@ import {
   ShieldAlert,
   AlertTriangle
 } from 'lucide-react';
+
+// ============================================================================
+// PORTAL HELPER (Monta modales directamente en document.body y bloquea scroll)
+// ============================================================================
+function PortalModal({ children, isOpen }) {
+  useEffect(() => {
+    if (isOpen && typeof document !== 'undefined') {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+  if (typeof document === 'undefined' || !document.body) return children;
+  return createPortal(children, document.body);
+}
 
 // ============================================================================
 // 1. SECRET ADMIN MODAL (Solo Números: Cédula 7530, Clave 1590, inputMode numeric)
@@ -68,85 +88,87 @@ export function SecretAdminModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 overflow-hidden text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-        
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-2xl shrink-0">
-            <Lock className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-              Acceso de Administración
-            </h2>
-          </div>
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-4 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs flex items-center gap-2 font-medium">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Cédula
-            </label>
-            <div className="relative">
-              <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                required
-                value={cedula}
-                onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold font-mono"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Contraseña
-            </label>
-            <div className="relative">
-              <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
-              <input
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold font-mono"
-              />
-            </div>
-          </div>
-
+    <PortalModal isOpen={isOpen}>
+      <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-[100dvh] z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 dark:bg-black/90 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+        <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 overflow-hidden text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+          
+          {/* Close Button */}
           <button
-            type="submit"
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            onClick={onClose}
+            className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
-            <ShieldCheck className="w-4 h-4" />
-            Ingresar
+            <X className="w-5 h-5" />
           </button>
-        </form>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-2xl shrink-0">
+              <Lock className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                Acceso de Administración
+              </h2>
+            </div>
+          </div>
+
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-4 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs flex items-center gap-2 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
+                Cédula
+              </label>
+              <div className="relative">
+                <UserCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  required
+                  value={cedula}
+                  onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold font-mono"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
+                Contraseña
+              </label>
+              <div className="relative">
+                <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-emerald-500/20 transition-all font-semibold font-mono"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Ingresar
+            </button>
+          </form>
+        </div>
       </div>
-    </div>
+    </PortalModal>
   );
 }
 
@@ -195,8 +217,9 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-      <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+    <PortalModal isOpen={isOpen}>
+      <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-[100dvh] z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 dark:bg-black/90 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+        <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button */}
         <button
@@ -371,6 +394,7 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
         </form>
       </div>
     </div>
+    </PortalModal>
   );
 }
 
@@ -388,6 +412,7 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerNumber, setNewPlayerNumber] = useState('');
   const [error, setError] = useState('');
+  const [confirmConfig, setConfirmConfig] = useState(null);
 
   useEffect(() => {
     setName(team.name || '');
@@ -440,9 +465,14 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
 
   const handleRemovePlayer = (playerId) => {
     if (players.length <= 5) {
-      if (!window.confirm('El reglamento exige mínimo 5 jugadores. ¿Deseas eliminarlo de todos modos?')) {
-        return;
-      }
+      setConfirmConfig({
+        title: '¿Eliminar jugador?',
+        message: 'El reglamento exige mínimo 5 jugadores por equipo. ¿Deseas eliminarlo de todos modos?',
+        confirmText: 'Eliminar de todos modos',
+        isDanger: true,
+        onConfirm: () => setPlayers(players.filter((p) => p.id !== playerId)),
+      });
+      return;
     }
     setPlayers(players.filter((p) => p.id !== playerId));
   };
@@ -458,6 +488,18 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
     );
   };
 
+  const proceedSaveTeam = () => {
+    const updatedTeam = {
+      ...team,
+      name: name.trim(),
+      logo: logo.trim() || '⚽',
+      group,
+      players,
+    };
+    onSaveTeam(updatedTeam);
+    onClose();
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -466,26 +508,23 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
     }
 
     if (players.length < 5) {
-      if (!window.confirm(`Este equipo tiene ${players.length} jugadores (mínimo recomendado es 5). ¿Deseas guardar de todos modos?`)) {
-        return;
-      }
+      setConfirmConfig({
+        title: 'Plantilla incompleta',
+        message: `Este equipo tiene ${players.length} jugadores inscritos (el reglamento recomienda mínimo 5). ¿Deseas guardar de todos modos?`,
+        confirmText: 'Guardar de todos modos',
+        isDanger: false,
+        onConfirm: proceedSaveTeam,
+      });
+      return;
     }
 
-    const updatedTeam = {
-      ...team,
-      name: name.trim(),
-      logo: logo.trim() || '⚽',
-      group,
-      players,
-    };
-
-    onSaveTeam(updatedTeam);
-    onClose();
+    proceedSaveTeam();
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+    <PortalModal isOpen={isOpen}>
+      <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-[100dvh] z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 dark:bg-black/90 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+        <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button */}
         <button
@@ -729,7 +768,23 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
         </form>
 
       </div>
+
+      {/* Modal de Confirmación Interno (Sin alertas del navegador) */}
+      <ConfirmModal
+        isOpen={Boolean(confirmConfig)}
+        title={confirmConfig?.title}
+        message={confirmConfig?.message}
+        confirmText={confirmConfig?.confirmText || 'Confirmar'}
+        cancelText="Cancelar"
+        isDanger={confirmConfig?.isDanger !== false}
+        onConfirm={() => {
+          if (confirmConfig?.onConfirm) confirmConfig.onConfirm();
+          setConfirmConfig(null);
+        }}
+        onClose={() => setConfirmConfig(null)}
+      />
     </div>
+    </PortalModal>
   );
 }
 
@@ -760,8 +815,9 @@ export function GoalAssignModal({
     : [...players].sort((a, b) => a.number - b.number);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[90vh] flex flex-col text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+    <PortalModal isOpen={isOpen}>
+      <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-[100dvh] z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 dark:bg-black/90 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+        <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[90vh] flex flex-col text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
@@ -917,6 +973,7 @@ export function GoalAssignModal({
 
       </div>
     </div>
+    </PortalModal>
   );
 }
 
@@ -949,6 +1006,9 @@ export function MatchCardsModal({
 
   const activeTeam = teams.find((t) => t.id === selectedTeamId);
   const activePlayers = activeTeam?.players || [];
+
+  // Tarjeta pendiente de confirmar eliminación con modal in-app
+  const [cardToDelete, setCardToDelete] = useState(null);
 
   // Tarjetas del jugador seleccionado en este partido
   const selectedPlayerMatchCards = matchCards.filter((c) => c.player_id === selectedPlayerId);
@@ -1029,8 +1089,9 @@ export function MatchCardsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-      <div className="relative w-full max-w-xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+    <PortalModal isOpen={isOpen}>
+      <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-[100dvh] z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 dark:bg-black/90 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+        <div className="relative w-full max-w-xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button */}
         <button
@@ -1253,9 +1314,7 @@ export function MatchCardsModal({
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`¿Deseas eliminar la tarjeta de ${info.playerName}?`)) {
-                          onDeleteCard(card.id);
-                        }
+                        setCardToDelete({ id: card.id, name: info.playerName });
                       }}
                       className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
                       title="Eliminar tarjeta"
@@ -1281,6 +1340,98 @@ export function MatchCardsModal({
         </div>
 
       </div>
+
+      {/* Modal de Confirmación Moderno (Directo en la App, sin ventanas del navegador) */}
+      <ConfirmModal
+        isOpen={Boolean(cardToDelete)}
+        title="¿Eliminar Tarjeta?"
+        message={`¿Estás seguro de que deseas anular y eliminar la tarjeta de ${cardToDelete?.name}? Se actualizará el registro disciplinario y la tabla de Fair Play de inmediato.`}
+        confirmText="Eliminar Tarjeta"
+        cancelText="Cancelar"
+        isDanger={true}
+        onConfirm={() => {
+          if (cardToDelete) {
+            onDeleteCard(cardToDelete.id);
+            setCardToDelete(null);
+          }
+        }}
+        onClose={() => setCardToDelete(null)}
+      />
     </div>
+    </PortalModal>
+  );
+}
+
+// ============================================================================
+// 6. CONFIRM MODAL (Modal Directo de la App, sin alertas nativas del navegador)
+// ============================================================================
+export function ConfirmModal({
+  isOpen,
+  title = '¿Confirmar acción?',
+  message,
+  confirmText = 'Confirmar',
+  cancelText = 'Cancelar',
+  isDanger = true,
+  icon = '⚠️',
+  onConfirm,
+  onClose,
+}) {
+  return (
+    <PortalModal isOpen={isOpen}>
+      <div
+        className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-[100dvh] z-[150] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 dark:bg-black/90 backdrop-blur-md animate-fadeIn"
+        onClick={onClose}
+        style={{ touchAction: 'manipulation' }}
+      >
+        <div
+          className="relative w-full max-w-sm sm:max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-6 text-slate-800 dark:text-slate-100 transition-all pointer-events-auto transform scale-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start gap-3.5 mb-4">
+            <div
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0 border ${
+                isDanger
+                  ? 'bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-900/80 text-red-600 dark:text-red-400'
+                  : 'bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/80 text-amber-600 dark:text-amber-400'
+              }`}
+            >
+              {icon}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-tight">
+                {title}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed whitespace-pre-line font-medium">
+                {message}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-bold transition-all text-center cursor-pointer"
+            >
+              {cancelText}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onConfirm();
+                onClose();
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs text-white transition-all text-center cursor-pointer shadow-md active:scale-98 ${
+                isDanger
+                  ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20'
+                  : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
+              }`}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    </PortalModal>
   );
 }

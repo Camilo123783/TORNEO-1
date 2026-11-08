@@ -17,7 +17,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { calculateGroupStandings, isGroupCompleted, getResolvedPlayoffMatch } from '../tournamentData';
-import { GoalAssignModal, MatchCardsModal } from './Modals';
+import { GoalAssignModal, MatchCardsModal, ConfirmModal } from './Modals';
 
 export default function AdminPanel({ 
   teams, 
@@ -39,6 +39,7 @@ export default function AdminPanel({
   const [successMsg, setSuccessMsg] = useState('');
   const [goalModalData, setGoalModalData] = useState(null); // { match, team, teamType, mode: 'add'|'subtract' }
   const [editingCardsMatch, setEditingCardsMatch] = useState(null); // match for cards modal
+  const [confirmConfig, setConfirmConfig] = useState(null); // In-app confirmation dialog
 
   // Custom credentials state (Cédula 7530, Clave 1590 sincronizadas en Supabase)
   const [customCedula, setCustomCedula] = useState(adminCedula);
@@ -65,7 +66,7 @@ export default function AdminPanel({
   const handleSaveCredentials = (e) => {
     e.preventDefault();
     if (!customCedula.trim() || !customPass.trim()) {
-      alert('La cédula y la contraseña no pueden estar vacías.');
+      showNotification('⚠️ La cédula y la contraseña no pueden estar vacías.');
       return;
     }
     if (onUpdateCredentials) {
@@ -243,12 +244,18 @@ export default function AdminPanel({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
-                if (window.confirm('⚠️ ¿Estás seguro de que deseas reiniciar todos los resultados del torneo a cero?\n\n- Todos los marcadores quedarán en 0-0 (programados)\n- Los goles de los jugadores volverán a 0 en la tabla de goleadores\n- Las llaves de eliminación directa volverán a su estado inicial')) {
-                  if (onResetTournament) {
-                    onResetTournament();
-                    showNotification('¡Torneo y resultados reiniciados exitosamente!');
+                setConfirmConfig({
+                  title: '¿Reiniciar Torneo y Marcadores?',
+                  message: 'Esta acción restablecerá todos los marcadores a 0-0 (programados), pondrá en cero los goles en la tabla de goleadores, limpiará las llaves de playoffs y eliminará las tarjetas registradas.\n\n¿Deseas continuar?',
+                  confirmText: 'Reiniciar Todo',
+                  isDanger: true,
+                  onConfirm: () => {
+                    if (onResetTournament) {
+                      onResetTournament();
+                      showNotification('¡Torneo y resultados reiniciados exitosamente!');
+                    }
                   }
-                }
+                });
               }}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs shadow-md shadow-red-600/20 transition-all cursor-pointer"
               title="Reiniciar todos los resultados y marcadores a cero"
@@ -590,10 +597,16 @@ export default function AdminPanel({
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`¿Deseas eliminar la tarjeta de ${player?.name || 'este jugador'}?`)) {
-                            onDeleteCard(c.id);
-                            showNotification('Tarjeta eliminada correctamente.');
-                          }
+                          setConfirmConfig({
+                            title: '¿Eliminar Tarjeta?',
+                            message: `¿Estás seguro de que deseas eliminar la tarjeta de ${player?.name || 'este jugador'}? Esta acción actualizará las estadísticas de inmediato.`,
+                            confirmText: 'Eliminar Tarjeta',
+                            isDanger: true,
+                            onConfirm: () => {
+                              onDeleteCard(c.id);
+                              showNotification('Tarjeta eliminada correctamente.');
+                            },
+                          });
                         }}
                         className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
                         title="Eliminar tarjeta"
@@ -742,10 +755,16 @@ export default function AdminPanel({
               </div>
               <button
                 onClick={() => {
-                  if (window.confirm('¿Estás seguro de que deseas restablecer los datos del torneo?')) {
-                    onResetTournament();
-                    showNotification('El torneo ha sido reiniciado.');
-                  }
+                  setConfirmConfig({
+                    title: '¿Reiniciar Torneo a Estado Inicial?',
+                    message: 'Se restablecerán todos los marcadores y los 12 equipos a los valores iniciales.\n\n¿Estás seguro?',
+                    confirmText: 'Reiniciar Torneo',
+                    isDanger: true,
+                    onConfirm: () => {
+                      onResetTournament();
+                      showNotification('El torneo ha sido reiniciado.');
+                    },
+                  });
                 }}
                 className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shrink-0 transition-colors cursor-pointer text-center"
               >
@@ -777,6 +796,21 @@ export default function AdminPanel({
         cards={cards}
         onSaveCard={onSaveCard}
         onDeleteCard={onDeleteCard}
+      />
+
+      {/* Modal de Confirmación Moderno (Directo en la App, sin ventanas del navegador) */}
+      <ConfirmModal
+        isOpen={Boolean(confirmConfig)}
+        title={confirmConfig?.title}
+        message={confirmConfig?.message}
+        confirmText={confirmConfig?.confirmText || 'Confirmar'}
+        cancelText="Cancelar"
+        isDanger={confirmConfig?.isDanger !== false}
+        onConfirm={() => {
+          if (confirmConfig?.onConfirm) confirmConfig.onConfirm();
+          setConfirmConfig(null);
+        }}
+        onClose={() => setConfirmConfig(null)}
       />
 
     </div>
