@@ -37,9 +37,10 @@ export const supabase = isSupabaseConfigured()
 // ==========================================
 // STANDINGS CALCULATOR (MICROFÚTBOL RULES)
 // 3 pts Win, 1 pt Draw, 0 pt Loss
-// Tiebreakers: PTS > DG > GF > Fewest GC > Name
+// Tiebreakers: PTS > DG > GF > Fewest GC > Fair Play (Menor puntaje de tarjetas) > Name
+// Fair Play: Amarilla = 1 pt penalización, Roja / Doble Amarilla = 3 pts penalización
 // ==========================================
-export function calculateGroupStandings(teams, matches, groupKey) {
+export function calculateGroupStandings(teams, matches, groupKey, cards = []) {
   const groupTeams = teams.filter(t => t.group === groupKey);
 
   const statsMap = {};
@@ -54,13 +55,33 @@ export function calculateGroupStandings(teams, matches, groupKey) {
       gc: 0,
       dg: 0,
       pts: 0,
-      form: []
+      form: [],
+      yellowCards: 0,
+      redCards: 0,
+      fairPlayPoints: 0 // Menor puntaje = mejor comportamiento disciplinario
     };
   });
 
-  const finishedGroupMatches = matches.filter(
-    m => m.group === groupKey && 
-         m.status === 'finished' && 
+  const groupMatches = matches.filter(m => m.group === groupKey);
+  const groupMatchIds = new Set(groupMatches.map(m => m.id));
+
+  // Cómputo de tarjetas disciplinarias para Juego Limpio (Fair Play)
+  if (Array.isArray(cards)) {
+    cards.forEach(c => {
+      if (groupMatchIds.has(c.match_id) && statsMap[c.team_id]) {
+        if (c.card_type === 'yellow') {
+          statsMap[c.team_id].yellowCards += 1;
+          statsMap[c.team_id].fairPlayPoints += 1;
+        } else if (c.card_type === 'red' || c.card_type === 'double_yellow') {
+          statsMap[c.team_id].redCards += 1;
+          statsMap[c.team_id].fairPlayPoints += 3;
+        }
+      }
+    });
+  }
+
+  const finishedGroupMatches = groupMatches.filter(
+    m => m.status === 'finished' && 
          m.home_score !== null && 
          m.away_score !== null &&
          statsMap[m.home_team_id] && 
@@ -106,14 +127,81 @@ export function calculateGroupStandings(teams, matches, groupKey) {
 
   const standings = Object.values(statsMap);
   standings.sort((a, b) => {
+    // 1. Puntos
     if (b.pts !== a.pts) return b.pts - a.pts;
+    // 2. Diferencia de Gol
     if (b.dg !== a.dg) return b.dg - a.dg;
+    // 3. Goles a Favor
     if (b.gf !== a.gf) return b.gf - a.gf;
+    // 4. Menor cantidad de Goles en Contra
     if (a.gc !== b.gc) return a.gc - b.gc;
+    // 5. Criterio de Desempate: Juego Limpio / Fair Play (menos tarjetas = mejor)
+    if (a.fairPlayPoints !== b.fairPlayPoints) return a.fairPlayPoints - b.fairPlayPoints;
+    // 6. Alfabético por nombre
     return a.team.name.localeCompare(b.team.name);
   });
 
   return standings;
+}
+
+// ==========================================
+// DISCIPLINARY / CARDS HELPERS
+// ==========================================
+export function getPlayerDisciplinaryStatus(playerId, teamId, targetMatchId, matches = [], cards = []) {
+  const playerCards = (cards || []).filter(c => c.player_id === playerId);
+  
+  // 1. Tarjetas en el partido en curso (targetMatchId)
+  const cardsInThisMatch = playerCards.filter(c => c.match_id === targetMatchId);
+  const yellowsInThisMatch = cardsInThisMatch.filter(c => c.card_type === 'yellow').length;
+  const redInThisMatch = cardsInThisMatch.some(c => c.card_type === 'red' || c.card_type === 'double_yellow');
+  
+  if (redInThisMatch || yellowsInThisMatch >= 2) {
+    return {
+      status: 'expelled',
+      isExpelled: true,
+      isSuspended: false,
+      reason: yellowsInThisMatch >= 2 
+        ? 'Expulsado por doble amarilla en este partido' 
+        : 'Expulsado por tarjeta roja directa en este partido',
+      yellowsInThisMatch,
+      redInThisMatch: true
+    };
+  }
+  
+  // 2. Verificar si está suspendido por sanción en el partido anterior de su equipo
+  const teamMatches = (matches || [])
+    .filter(m => m.home_team_id === teamId || m.away_team_id === teamId)
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    
+  const currentMatchIndex = teamMatches.findIndex(m => m.id === targetMatchId);
+  if (currentMatchIndex > 0) {
+    const previousMatch = teamMatches[currentMatchIndex - 1];
+    const prevMatchCards = playerCards.filter(c => c.match_id === previousMatch.id);
+    const prevYellows = prevMatchCards.filter(c => c.card_type === 'yellow').length;
+    const prevRed = prevMatchCards.some(c => c.card_type === 'red' || c.card_type === 'double_yellow');
+    
+    if (prevRed || prevYellows >= 2) {
+      return {
+        status: 'suspended',
+        isExpelled: false,
+        isSuspended: true,
+        suspendedForMatchId: targetMatchId,
+        sanctionMatch: previousMatch,
+        reason: `Suspendido por ${prevYellows >= 2 ? 'doble amarilla (roja)' : 'tarjeta roja directa'} en ${previousMatch.round || 'la fecha anterior'}`,
+        yellowsInThisMatch,
+        redInThisMatch: false
+      };
+    }
+  }
+  
+  return {
+    status: 'active',
+    isExpelled: false,
+    isSuspended: false,
+    reason: null,
+    yellowsInThisMatch,
+    redInThisMatch: false
+  };
 }
 
 // ==========================================

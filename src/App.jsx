@@ -6,7 +6,8 @@ import {
   MatchesList, 
   PlayoffBracket, 
   TeamsList, 
-  TopScorers 
+  TopScorers,
+  CardsView
 } from './components/TournamentViews';
 import { 
   SecretAdminModal, 
@@ -24,9 +25,10 @@ import { Lock, Trophy, RefreshCw, X } from 'lucide-react';
 export default function App() {
   const isConnected = isSupabaseConfigured();
 
-  // State: Teams, Matches y Credenciales (Manejados 100% en Supabase sin localStorage)
+  // State: Teams, Matches, Cards y Credenciales (Manejados 100% en Supabase)
   const [teams, setTeams] = useState(INITIAL_TEAMS);
   const [matches, setMatches] = useState(INITIAL_MATCHES);
+  const [cards, setCards] = useState([]);
   const [adminCedula, setAdminCedula] = useState('7530');
   const [adminPassword, setAdminPassword] = useState('1590');
   const [isLoading, setIsLoading] = useState(true);
@@ -145,6 +147,17 @@ export default function App() {
           if (p?.value) setAdminPassword(p.value);
         }
       } catch (e) {}
+
+      // 4. Cargar Tarjetas Disciplinarias desde tabla cards
+      try {
+        const { data: cardsData } = await supabase
+          .from('cards')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (cardsData) {
+          setCards(cardsData);
+        }
+      } catch (e) {}
     } catch (err) {
       console.error('Error al sincronizar datos desde Supabase:', err);
     } finally {
@@ -202,6 +215,15 @@ export default function App() {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             if (payload.new.key === 'admin_cedula') setAdminCedula(payload.new.value);
             if (payload.new.key === 'admin_password') setAdminPassword(payload.new.value);
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setCards((prev) => [payload.new, ...prev.filter((c) => c.id !== payload.new.id)]);
+          } else if (payload.eventType === 'DELETE') {
+            setCards((prev) => prev.filter((c) => c.id !== payload.old.id));
+          } else if (payload.eventType === 'UPDATE') {
+            setCards((prev) => prev.map((c) => (c.id === payload.new.id ? payload.new : c)));
           }
         })
         .subscribe();
@@ -355,7 +377,31 @@ export default function App() {
     }
   };
 
-  // Reiniciar torneo directamente en tablas de Supabase (Marcadores a 0 y Goles a 0)
+  // Guardar o actualizar tarjeta disciplinaria en tabla 'cards' de Supabase
+  const handleSaveCard = async (newCard) => {
+    setCards((prev) => [newCard, ...prev.filter((c) => c.id !== newCard.id)]);
+    if (isConnected && supabase) {
+      try {
+        await supabase.from('cards').upsert(newCard);
+      } catch (err) {
+        console.error('Error al guardar tarjeta en Supabase:', err);
+      }
+    }
+  };
+
+  // Eliminar tarjeta disciplinaria en tabla 'cards' de Supabase
+  const handleDeleteCard = async (cardId) => {
+    setCards((prev) => prev.filter((c) => c.id !== cardId));
+    if (isConnected && supabase) {
+      try {
+        await supabase.from('cards').delete().eq('id', cardId);
+      } catch (err) {
+        console.error('Error al eliminar tarjeta en Supabase:', err);
+      }
+    }
+  };
+
+  // Reiniciar torneo directamente en tablas de Supabase (Marcadores a 0, Goles a 0 y Tarjetas limpias)
   const handleResetTournament = async () => {
     // 1. Equipos con jugadores en 0 goles
     const resetTeams = teams.map((t) => ({
@@ -375,6 +421,7 @@ export default function App() {
 
     setTeams(resetTeams);
     setMatches(resetMatches);
+    setCards([]);
 
     if (isConnected && supabase) {
       try {
@@ -389,7 +436,12 @@ export default function App() {
           .from('matches')
           .upsert(resetMatches);
 
-        // 3. Sincronizar campo players en teams
+        // 3. Eliminar todas las tarjetas de la base de datos
+        try {
+          await supabase.from('cards').delete().neq('id', 'none');
+        } catch (e) {}
+
+        // 4. Sincronizar campo players en teams
         for (const t of resetTeams) {
           try {
             await supabase
@@ -426,7 +478,7 @@ export default function App() {
       
       {/* High-Visibility Admin Banner (Visible en todo momento en modo admin) */}
       {isAdmin && (
-        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-3 sm:px-4 shadow-sm flex items-center justify-between sticky top-0 z-50 gap-2">
+        <div className="bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-2 px-3 sm:px-4 shadow-sm flex items-center justify-between sticky top-0 z-30 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="p-1 bg-white/20 rounded shrink-0">⚡</span>
             <span className="hidden sm:inline truncate">MODO ADMINISTRADOR ACTIVO — Puedes cambiar marcadores, nombres de equipos y jugadores</span>
@@ -460,7 +512,7 @@ export default function App() {
         
         {/* Tab 1: Group Standings */}
         {activeTab === 'groups' && (
-          <GroupStandings teams={teams} matches={matches} />
+          <GroupStandings teams={teams} matches={matches} cards={cards} />
         )}
 
         {/* Tab 2: Matches & Fixtures */}
@@ -470,6 +522,7 @@ export default function App() {
             matches={matches}
             isAdmin={isAdmin}
             onEditMatch={(m) => setEditingMatch(m)}
+            cards={cards}
           />
         )}
 
@@ -501,12 +554,26 @@ export default function App() {
           />
         )}
 
-        {/* Tab 6: Admin Panel */}
+        {/* Tab 6: Cards and Disciplinary / Fair Play View */}
+        {activeTab === 'cards' && (
+          <CardsView
+            teams={teams}
+            matches={matches}
+            cards={cards}
+            isAdmin={isAdmin}
+            onDeleteCard={handleDeleteCard}
+          />
+        )}
+
+        {/* Tab 7: Admin Panel */}
         {activeTab === 'admin' && isAdmin && (
           <AdminPanel
             teams={teams}
             matches={matches}
             setMatches={setMatches}
+            cards={cards}
+            onSaveCard={handleSaveCard}
+            onDeleteCard={handleDeleteCard}
             onSaveSingleMatch={handleSaveMatch}
             onEditMatch={(m) => setEditingMatch(m)}
             onEditTeam={(team) => setEditingTeam(team)}

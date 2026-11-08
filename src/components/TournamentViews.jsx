@@ -14,7 +14,11 @@ import {
   Search, 
   AlertTriangle, 
   Minus, 
-  Plus 
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  AlertOctagon,
+  Trash2
 } from 'lucide-react';
 import { 
   calculateGroupStandings, 
@@ -27,7 +31,7 @@ import {
 // ============================================================================
 // 1. GROUP STANDINGS (Tablas de Posiciones Grupos A, B, C, D)
 // ============================================================================
-export function GroupStandings({ teams, matches }) {
+export function GroupStandings({ teams, matches, cards = [] }) {
   const [selectedGroup, setSelectedGroup] = useState('ALL');
   const groups = ['A', 'B', 'C', 'D'];
   const liveMatches = matches.filter((m) => m.status === 'live');
@@ -110,7 +114,7 @@ export function GroupStandings({ teams, matches }) {
         {groups
           .filter((grp) => selectedGroup === 'ALL' || selectedGroup === grp)
           .map((grp) => {
-            const standings = calculateGroupStandings(teams, matches, grp);
+            const standings = calculateGroupStandings(teams, matches, grp, cards);
             const status = getGroupStatus(matches, grp);
             const isCompleted = status.isCompleted;
 
@@ -160,6 +164,7 @@ export function GroupStandings({ teams, matches }) {
                         <th className="py-2 px-1 text-center" title="Goles a Favor">GF</th>
                         <th className="py-2 px-1 text-center" title="Goles en Contra">GC</th>
                         <th className="py-2 px-1.5 text-center font-black" title="Diferencia de Gol">DG</th>
+                        <th className="py-2 px-1 text-center" title="Tarjetas: Amarillas / Rojas (Criterio Fair Play de Desempate)">Tarjetas</th>
                         <th className="py-2 px-2 text-center font-black text-emerald-700 dark:text-emerald-400" title="Puntos">PTS</th>
                       </tr>
                     </thead>
@@ -205,6 +210,16 @@ export function GroupStandings({ teams, matches }) {
                             }`}>
                               {row.dg > 0 ? `+${row.dg}` : row.dg}
                             </td>
+                            <td className="py-2.5 px-1 text-center whitespace-nowrap text-[11px] font-bold" title={`Fair Play: ${row.yellowCards} Amarillas, ${row.redCards} Rojas (${row.fairPlayPoints} pts)`}>
+                              {row.yellowCards > 0 || row.redCards > 0 ? (
+                                <div className="inline-flex items-center gap-1 justify-center">
+                                  {row.yellowCards > 0 && <span className="text-amber-500 font-bold">🟨{row.yellowCards}</span>}
+                                  {row.redCards > 0 && <span className="text-red-500 font-bold">🟥{row.redCards}</span>}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 dark:text-zinc-500 font-mono text-[10px]">0</span>
+                              )}
+                            </td>
                             <td className="py-2.5 px-2 text-center font-black text-sm text-emerald-700 dark:text-emerald-400">
                               <span className="bg-emerald-100/70 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
                                 {row.pts}
@@ -217,7 +232,7 @@ export function GroupStandings({ teams, matches }) {
                   </table>
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
                   {isCompleted ? (
                     <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
@@ -226,10 +241,12 @@ export function GroupStandings({ teams, matches }) {
                   ) : (
                     <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
                       <Clock className="w-3.5 h-3.5 shrink-0" />
-                      <span>Clasifican a Cuartos al finalizar los 3 PJ</span>
+                      <span>Clasifican a Cuartos al completar los 3 PJ</span>
                     </div>
                   )}
-                  <span>Victoria = 3 pts | Empate = 1 pt</span>
+                  <span className="text-slate-400 dark:text-zinc-500">
+                    Desempate: 1° Pts • 2° DG • 3° GF • 4° GC • 5° Fair Play (Tarjetas)
+                  </span>
                 </div>
               </div>
             );
@@ -242,7 +259,7 @@ export function GroupStandings({ teams, matches }) {
 // ============================================================================
 // 2. MATCHES LIST (Partidos y Resultados de Fase de Grupos y Playoffs)
 // ============================================================================
-export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
+export function MatchesList({ teams, matches, isAdmin, onEditMatch, cards = [] }) {
   const [filterPhase, setFilterPhase] = useState('ALL');
   const [filterGroup, setFilterGroup] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -410,6 +427,20 @@ export function MatchesList({ teams, matches, isAdmin, onEditMatch }) {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Tarjetas en el partido */}
+                    {(() => {
+                      const matchCards = (cards || []).filter((c) => c.match_id === m.id);
+                      if (matchCards.length === 0) return null;
+                      const y = matchCards.filter((c) => c.card_type === 'yellow').length;
+                      const r = matchCards.filter((c) => c.card_type === 'red' || c.card_type === 'double_yellow').length;
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                          {y > 0 && <span className="text-amber-500">🟨{y}</span>}
+                          {r > 0 && <span className="text-red-500">🟥{r}</span>}
+                        </span>
+                      );
+                    })()}
+
                     {m.status === 'finished' && (
                       <span className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-900 px-2 py-0.5 rounded-md border border-transparent dark:border-zinc-800">
                         <CheckCircle className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
@@ -1288,6 +1319,441 @@ export function TopScorers({ teams, isAdmin, onUpdatePlayerGoals }) {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 6. CARDS & FAIR PLAY VIEW (Panel Público de Tarjetas, Sanciones y Juego Limpio)
+// ============================================================================
+export function CardsView({ teams = [], matches = [], cards = [], isAdmin = false, onDeleteCard }) {
+  const [filterTeam, setFilterTeam] = useState('ALL');
+  const [filterType, setFilterType] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // 1. Identificar suspensiones activas para el siguiente partido de cada equipo
+  const suspendedList = [];
+  teams.forEach((team) => {
+    const teamMatches = (matches || [])
+      .filter((m) => m.home_team_id === team.id || m.away_team_id === team.id)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    (team.players || []).forEach((player) => {
+      const playerCards = (cards || []).filter((c) => c.player_id === player.id);
+
+      teamMatches.forEach((m, idx) => {
+        const matchCards = playerCards.filter((c) => c.match_id === m.id);
+        const yellows = matchCards.filter((c) => c.card_type === 'yellow').length;
+        const hasRed = matchCards.some((c) => c.card_type === 'red' || c.card_type === 'double_yellow');
+
+        if (hasRed || yellows >= 2) {
+          const nextMatch = teamMatches[idx + 1];
+          if (nextMatch) {
+            const nextHome = teams.find((t) => t.id === nextMatch.home_team_id);
+            const nextAway = teams.find((t) => t.id === nextMatch.away_team_id);
+
+            suspendedList.push({
+              player,
+              team,
+              sanctionMatch: m,
+              suspendedForMatch: nextMatch,
+              nextMatchLabel: `${nextHome ? nextHome.name : 'Local'} vs ${nextAway ? nextAway.name : 'Visitante'} (${nextMatch.round})`,
+              reason: yellows >= 2 ? '🟨🟨 Doble Amarilla' : '🟥 Roja Directa',
+              isServed: nextMatch.status === 'finished',
+            });
+          }
+        }
+      });
+    });
+  });
+
+  const activeSuspensions = suspendedList.filter((s) => !s.isServed);
+
+  // 2. Ranking de Juego Limpio / Fair Play (12 Equipos)
+  const fairPlayRanking = teams
+    .map((team) => {
+      const teamCards = (cards || []).filter((c) => c.team_id === team.id);
+      const yellowCards = teamCards.filter((c) => c.card_type === 'yellow').length;
+      const redCards = teamCards.filter((c) => c.card_type === 'red' || c.card_type === 'double_yellow').length;
+      const fairPlayPoints = yellowCards * 1 + redCards * 3;
+
+      return {
+        team,
+        yellowCards,
+        redCards,
+        totalCards: yellowCards + redCards,
+        fairPlayPoints,
+      };
+    })
+    .sort((a, b) => {
+      if (a.fairPlayPoints !== b.fairPlayPoints) return a.fairPlayPoints - b.fairPlayPoints;
+      if (a.redCards !== b.redCards) return a.redCards - b.redCards;
+      return a.team.name.localeCompare(b.team.name);
+    });
+
+  // 3. Filtrar historial de tarjetas
+  const filteredCards = (cards || []).filter((c) => {
+    if (filterTeam !== 'ALL' && c.team_id !== filterTeam) return false;
+    if (filterType === 'yellow' && c.card_type !== 'yellow') return false;
+    if (filterType === 'red' && c.card_type !== 'red' && c.card_type !== 'double_yellow') return false;
+
+    if (searchTerm.trim()) {
+      const t = teams.find((item) => item.id === c.team_id);
+      const p = t?.players?.find((item) => item.id === c.player_id);
+      const search = searchTerm.toLowerCase();
+      const matchPlayer = p?.name?.toLowerCase().includes(search);
+      const matchTeam = t?.name?.toLowerCase().includes(search);
+      if (!matchPlayer && !matchTeam) return false;
+    }
+
+    return true;
+  });
+
+  const getMatchInfo = (matchId) => {
+    const m = (matches || []).find((item) => item.id === matchId);
+    if (!m) return { label: 'Partido Oficial', round: 'Partido' };
+    const h = teams.find((t) => t.id === m.home_team_id);
+    const a = teams.find((t) => t.id === m.away_team_id);
+    return {
+      round: m.round,
+      label: `${h ? h.name : 'Local'} vs ${a ? a.name : 'Visitante'}`,
+      date: m.date,
+    };
+  };
+
+  const getPlayerInfo = (teamId, playerId) => {
+    const t = teams.find((item) => item.id === teamId);
+    const p = t?.players?.find((item) => item.id === playerId);
+    return {
+      teamName: t?.name || 'Equipo',
+      teamLogo: t?.logo || '⚽',
+      playerName: p?.name || 'Jugador',
+      playerNumber: p?.number || '?',
+    };
+  };
+
+  return (
+    <div className="space-y-6 w-full max-w-full overflow-hidden">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+            Tribunal de Disciplina & Fair Play
+          </span>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <span>Tarjetas & Sanciones</span>
+            <span className="text-lg">🟨🟥</span>
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+            Control de amonestaciones, suspensiones por expulsión y tabla de Juego Limpio para desempates
+          </p>
+        </div>
+      </div>
+
+      {/* REGLAMENTO DISCIPLINARIO (Guía visual para todos los participantes) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/80">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">🟨</span>
+            <span className="text-xs font-black text-amber-900 dark:text-amber-300">1 Amarilla</span>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-400 font-medium leading-relaxed">
+            Amonestación preventiva. Suma 1 punto de penalización en la tabla de Fair Play.
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/80">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">🟨🟨</span>
+            <span className="text-xs font-black text-red-900 dark:text-red-300">2 Amarillas (Partido)</span>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-400 font-medium leading-relaxed">
+            Expulsión inmediata del partido y <strong>1 fecha de suspensión</strong> para el próximo partido.
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/80">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">🟥</span>
+            <span className="text-xs font-black text-red-900 dark:text-red-300">Roja Directa</span>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-400 font-medium leading-relaxed">
+            Expulsión directa del partido y <strong>1 fecha de suspensión</strong> obligatoria.
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/80">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">⚖️</span>
+            <span className="text-xs font-black text-emerald-900 dark:text-emerald-300">Criterio Fair Play</span>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-400 font-medium leading-relaxed">
+            Si hay empate en Pts, DG, GF y GC, <strong>clasifica el equipo con mejor Juego Limpio</strong> (menos tarjetas).
+          </p>
+        </div>
+      </div>
+
+      {/* SECCIÓN 1: JUGADORES SANCIONADOS / SUSPENDIDOS ACTIVOS */}
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="p-1.5 rounded-xl bg-red-100 dark:bg-red-950 text-red-600 text-sm">🚨</span>
+          <div>
+            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              Sanciones Activas (Suspendidos para la Próxima Fecha)
+            </h3>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+              Jugadores no habilitados para disputar el siguiente compromiso de su equipo
+            </p>
+          </div>
+        </div>
+
+        {activeSuspensions.length === 0 ? (
+          <div className="py-6 text-center rounded-2xl bg-slate-50 dark:bg-zinc-900/50 border border-dashed border-slate-200 dark:border-zinc-800">
+            <span className="text-2xl block mb-1">✅</span>
+            <p className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+              No hay jugadores suspendidos en este momento
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+              Todos los jugadores inscritos están habilitados para jugar la siguiente jornada.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {activeSuspensions.map((s, idx) => (
+              <div
+                key={idx}
+                className="p-3.5 rounded-2xl bg-red-50/70 dark:bg-red-950/30 border border-red-200 dark:border-red-900/80 flex items-start justify-between gap-3 shadow-2xs"
+              >
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-red-600 text-white font-mono font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                    #{s.player.number}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                      {s.player.name}
+                    </h4>
+                    <p className="text-xs text-slate-600 dark:text-zinc-300 font-bold flex items-center gap-1 mt-0.5">
+                      <span>{s.team.logo}</span>
+                      <span className="truncate">{s.team.name}</span>
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600 text-white">
+                        {s.reason} en {s.sanctionMatch.round || 'partido anterior'}
+                      </span>
+                      <p className="text-[11px] font-extrabold text-red-700 dark:text-red-300">
+                        🚫 No jugará: {s.nextMatchLabel}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* SECCIÓN 2: TABLA DE JUEGO LIMPIO (FAIR PLAY RANKING) */}
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <span>🏆 Tabla de Juego Limpio (Fair Play)</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+              Menos puntos de penalización = Mejor posición de desempate en fase de grupos
+            </p>
+          </div>
+        </div>
+
+        <div className="w-full overflow-x-auto no-scrollbar">
+          <table className="w-full min-w-[420px] text-left text-xs">
+            <thead>
+              <tr className="text-[10px] sm:text-[11px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-wider border-b border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/80">
+                <th className="py-2.5 px-2 text-center w-8">#</th>
+                <th className="py-2.5 px-3">Equipo</th>
+                <th className="py-2.5 px-2 text-center">Grupo</th>
+                <th className="py-2.5 px-3 text-center" title="Tarjetas Amarillas (1 pt c/u)">🟨 Amarillas</th>
+                <th className="py-2.5 px-3 text-center" title="Tarjetas Rojas (3 pts c/u)">🟥 Rojas</th>
+                <th className="py-2.5 px-3 text-center font-black text-emerald-700 dark:text-emerald-400" title="Puntos de Penalización (Menos es mejor)">Pts Fair Play</th>
+                <th className="py-2.5 px-3 text-center">Estado Disciplinario</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60 font-medium">
+              {fairPlayRanking.map((row, idx) => {
+                const isClean = row.fairPlayPoints === 0;
+                return (
+                  <tr key={row.team.id} className="hover:bg-slate-50/60 dark:hover:bg-zinc-900/40 transition-colors">
+                    <td className="py-2.5 px-2 text-center font-bold text-slate-500 dark:text-zinc-400">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{row.team.logo}</span>
+                        <span>{row.team.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-bold text-slate-500 dark:text-zinc-400">
+                      Grupo {row.team.group}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-amber-600 dark:text-amber-400">
+                      {row.yellowCards}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-red-600 dark:text-red-400">
+                      {row.redCards}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-black text-sm">
+                      <span className={`px-2 py-0.5 rounded-md font-mono ${
+                        isClean 
+                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' 
+                          : 'bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200'
+                      }`}>
+                        {row.fairPlayPoints}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      {isClean ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          ✨ Impecable (0 tarjetas)
+                        </span>
+                      ) : row.redCards > 0 ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
+                          ⚠️ Con Expulsiones
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                          🟡 Con Amonestaciones
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SECCIÓN 3: HISTORIAL COMPLETO DE TARJETAS REGISTRADAS */}
+      <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              Historial de Tarjetas del Torneo ({cards.length})
+            </h3>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+              Registro completo de todas las amonestaciones y expulsiones por partido
+            </p>
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={filterTeam}
+              onChange={(e) => setFilterTeam(e.target.value)}
+              className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+            >
+              <option value="ALL">Todos los Equipos</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.logo} {t.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+            >
+              <option value="ALL">Todas las Tarjetas</option>
+              <option value="yellow">Solo Amarillas (🟨)</option>
+              <option value="red">Solo Rojas / Expulsiones (🟥)</option>
+            </select>
+          </div>
+        </div>
+
+        {filteredCards.length === 0 ? (
+          <div className="py-8 text-center rounded-2xl bg-slate-50 dark:bg-zinc-900/40 border border-dashed border-slate-200 dark:border-zinc-800">
+            <span className="text-3xl block mb-1">🕊️</span>
+            <p className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+              No hay tarjetas registradas con los filtros seleccionados
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredCards.map((card) => {
+              const pInfo = getPlayerInfo(card.team_id, card.player_id);
+              const mInfo = getMatchInfo(card.match_id);
+              const isDoubleYellow = card.card_type === 'double_yellow';
+              const isRed = card.card_type === 'red';
+
+              return (
+                <div
+                  key={card.id}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-2xl border transition-all gap-2 ${
+                    isRed || isDoubleYellow
+                      ? 'border-red-200 dark:border-red-900/60 bg-red-50/30 dark:bg-red-950/20'
+                      : 'border-amber-200 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-8 h-8 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 font-mono font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                      #{pInfo.playerNumber}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                          {pInfo.playerName}
+                        </span>
+                        <span className="text-xs font-bold text-slate-600 dark:text-zinc-400 flex items-center gap-1">
+                          <span>{pInfo.teamLogo}</span>
+                          <span className="truncate">{pInfo.teamName}</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                        {mInfo.round}: <span className="font-semibold">{mInfo.label}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-zinc-800">
+                    {isDoubleYellow ? (
+                      <span className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-red-600 text-white flex items-center gap-1 shadow-2xs">
+                        <span>🟨🟨 Doble Amarilla (Expulsado)</span>
+                      </span>
+                    ) : isRed ? (
+                      <span className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-red-600 text-white flex items-center gap-1 shadow-2xs">
+                        <span>🟥 Tarjeta Roja Directa</span>
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-amber-400 text-amber-950 flex items-center gap-1 shadow-2xs">
+                        <span>🟨 Tarjeta Amarilla</span>
+                      </span>
+                    )}
+
+                    {isAdmin && onDeleteCard && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`¿Deseas eliminar la tarjeta de ${pInfo.playerName}?`)) {
+                            onDeleteCard(card.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors cursor-pointer"
+                        title="Eliminar tarjeta (Modo Admin)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

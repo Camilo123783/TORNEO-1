@@ -9,7 +9,8 @@ import {
   Award, 
   RefreshCw,
   Moon,
-  Sun
+  Sun,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function Header({ 
@@ -161,7 +162,7 @@ export default function Header({
   }, [isAdmin, onOpenLogin, setActiveTab]);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 dark:bg-black/95 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800 shadow-sm select-none w-full transition-colors duration-200">
+    <header className="sticky top-0 z-20 bg-white/95 dark:bg-black/95 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800 shadow-sm select-none w-full transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         
         {/* Main top row */}
@@ -210,11 +211,6 @@ export default function Header({
               {isHolding && (
                 <div className="absolute inset-0 rounded-2xl border-2 border-emerald-500 animate-pulse bg-emerald-500/25 pointer-events-none"></div>
               )}
-
-              {/* Dark mode badge indicator */}
-              <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 dark:bg-zinc-800 text-[9px] text-white border border-slate-200 dark:border-zinc-700 shadow-xs pointer-events-none">
-                {isDarkMode ? '🌙' : '☀️'}
-              </span>
 
               {isAdmin && (
                 <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -338,6 +334,18 @@ export default function Header({
           >
             <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>Goleadores ⚽</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cards')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              activeTab === 'cards'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-900'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+            <span>Tarjetas 🟨🟥</span>
           </button>
 
           {isAdmin && (

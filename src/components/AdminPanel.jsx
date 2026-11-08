@@ -12,15 +12,20 @@ import {
   Save,
   Plus,
   Minus,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import { calculateGroupStandings, isGroupCompleted, getResolvedPlayoffMatch } from '../tournamentData';
-import { GoalAssignModal } from './Modals';
+import { GoalAssignModal, MatchCardsModal } from './Modals';
 
 export default function AdminPanel({ 
   teams, 
   matches, 
   setMatches, 
+  cards = [],
+  onSaveCard,
+  onDeleteCard,
   onEditMatch, 
   onEditTeam,
   onResetTournament,
@@ -30,9 +35,10 @@ export default function AdminPanel({
   adminPassword = '1590',
   onUpdateCredentials
 }) {
-  const [activeAdminTab, setActiveAdminTab] = useState('matches'); // 'matches', 'teams', 'settings'
+  const [activeAdminTab, setActiveAdminTab] = useState('matches'); // 'matches', 'cards', 'teams', 'settings'
   const [successMsg, setSuccessMsg] = useState('');
   const [goalModalData, setGoalModalData] = useState(null); // { match, team, teamType, mode: 'add'|'subtract' }
+  const [editingCardsMatch, setEditingCardsMatch] = useState(null); // match for cards modal
 
   // Custom credentials state (Cédula 7530, Clave 1590 sincronizadas en Supabase)
   const [customCedula, setCustomCedula] = useState(adminCedula);
@@ -307,6 +313,18 @@ export default function AdminPanel({
         </button>
 
         <button
+          onClick={() => setActiveAdminTab('cards')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeAdminTab === 'cards'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-900'
+          }`}
+        >
+          <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+          <span>Tarjetas ({cards.length})</span>
+        </button>
+
+        <button
           onClick={() => setActiveAdminTab('teams')}
           className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeAdminTab === 'teams'
@@ -343,6 +361,7 @@ export default function AdminPanel({
               const m = rawM.phase === 'playoffs' ? getResolvedPlayoffMatch(rawM, teams, matches) : rawM;
               const home = m.resolvedHomeTeam || (m.home_team_id ? getTeam(m.home_team_id) : null);
               const away = m.resolvedAwayTeam || (m.away_team_id ? getTeam(m.away_team_id) : null);
+              const matchCards = (cards || []).filter((c) => c.match_id === m.id);
 
               return (
                 <div
@@ -393,6 +412,21 @@ export default function AdminPanel({
                           ✅ Final
                         </button>
                       </div>
+
+                      {/* Botón de Tarjetas en este partido */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingCardsMatch(m)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-black transition-all cursor-pointer border ${
+                          matchCards.length > 0
+                            ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-2xs'
+                            : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:text-amber-600'
+                        }`}
+                        title="Gestionar tarjetas (Amarillas y Rojas) de este partido"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Tarjetas ({matchCards.length})</span>
+                      </button>
 
                       <button
                         onClick={() => onEditMatch(m)}
@@ -472,6 +506,106 @@ export default function AdminPanel({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* SECTION: CARDS MANAGEMENT TAB */}
+      {activeAdminTab === 'cards' && (
+        <div className="space-y-4">
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs sm:text-sm font-black text-amber-900 dark:text-amber-300">
+                Registro de Tarjetas & Sanciones Disciplinarias ({cards.length})
+              </h4>
+              <p className="text-[11px] text-slate-600 dark:text-zinc-400 mt-0.5">
+                Para asignar una tarjeta a un jugador, ve a la pestaña <b>Marcadores</b> y pulsa en el botón <b>"Tarjetas"</b> de su partido.
+              </p>
+            </div>
+          </div>
+
+          {cards.length === 0 ? (
+            <div className="py-10 text-center bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-sm">
+              <span className="text-3xl block mb-2">🕊️</span>
+              <p className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                No hay tarjetas registradas en el torneo
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1">
+                Todas las amonestaciones asignadas desde los partidos aparecerán aquí con opción para eliminarlas si hubo error.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-sm space-y-2">
+              {cards.map((c) => {
+                const team = teams.find((t) => t.id === c.team_id);
+                const player = team?.players?.find((p) => p.id === c.player_id);
+                const match = matches.find((m) => m.id === c.match_id);
+                const matchHome = teams.find((t) => t.id === match?.home_team_id);
+                const matchAway = teams.find((t) => t.id === match?.away_team_id);
+                const isDoubleYellow = c.card_type === 'double_yellow';
+                const isRed = c.card_type === 'red';
+
+                return (
+                  <div
+                    key={c.id}
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border gap-2.5 ${
+                      isRed || isDoubleYellow
+                        ? 'border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20'
+                        : 'border-amber-200 dark:border-amber-900/60 bg-amber-50/30 dark:bg-amber-950/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-8 h-8 rounded-xl bg-white dark:bg-zinc-900 font-mono font-black text-xs flex items-center justify-center shrink-0 border border-slate-200 dark:border-zinc-700 shadow-2xs">
+                        #{player?.number || '?'}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                            {player?.name || 'Jugador'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-500 dark:text-zinc-400">
+                            ({team?.logo} {team?.name})
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
+                          {match?.round || 'Partido'}: <span className="font-semibold">{matchHome?.name || 'Local'} vs {matchAway?.name || 'Visitante'}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0">
+                      {isDoubleYellow ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600 text-white">
+                          🟨🟨 Doble Amarilla (Expulsado)
+                        </span>
+                      ) : isRed ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600 text-white">
+                          🟥 Roja Directa (Expulsado)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-400 text-amber-950">
+                          🟨 Tarjeta Amarilla
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`¿Deseas eliminar la tarjeta de ${player?.name || 'este jugador'}?`)) {
+                            onDeleteCard(c.id);
+                            showNotification('Tarjeta eliminada correctamente.');
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                        title="Eliminar tarjeta"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -632,6 +766,17 @@ export default function AdminPanel({
         teamType={goalModalData?.teamType}
         mode={goalModalData?.mode}
         onConfirmGoal={handleConfirmGoal}
+      />
+
+      {/* Modal para Gestión de Tarjetas Disciplinarias por Partido */}
+      <MatchCardsModal
+        isOpen={Boolean(editingCardsMatch)}
+        onClose={() => setEditingCardsMatch(null)}
+        match={editingCardsMatch}
+        teams={teams}
+        cards={cards}
+        onSaveCard={onSaveCard}
+        onDeleteCard={onDeleteCard}
       />
 
     </div>

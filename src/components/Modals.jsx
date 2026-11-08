@@ -12,7 +12,9 @@ import {
   Trash2, 
   Clock, 
   MapPin,
-  Award 
+  Award,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 
 // ============================================================================
@@ -66,8 +68,8 @@ export function SecretAdminModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 overflow-hidden text-slate-800 dark:text-slate-100 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 overflow-hidden text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button */}
         <button
@@ -193,8 +195,8 @@ export function EditMatchModal({ isOpen, onClose, match, teams, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+      <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button */}
         <button
@@ -482,8 +484,8 @@ export function TeamRosterModal({ isOpen, onClose, team, onSaveTeam }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Close Button */}
         <button
@@ -758,8 +760,8 @@ export function GoalAssignModal({
     : [...players].sort((a, b) => a.number - b.number);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[90vh] flex flex-col text-slate-800 dark:text-slate-100 transition-colors">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+      <div className="relative w-full max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[90vh] flex flex-col text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
@@ -910,6 +912,371 @@ export function GoalAssignModal({
             className="w-full py-2 px-3 rounded-xl bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-bold transition-all text-center cursor-pointer"
           >
             Cancelar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 5. MATCH CARDS MODAL (Control Disciplinario: Tarjetas Amarillas y Rojas)
+// ============================================================================
+export function MatchCardsModal({
+  isOpen,
+  onClose,
+  match,
+  teams,
+  cards = [],
+  onSaveCard,
+  onDeleteCard
+}) {
+  if (!isOpen || !match) return null;
+
+  const homeTeam = teams.find((t) => t.id === match.home_team_id);
+  const awayTeam = teams.find((t) => t.id === match.away_team_id);
+
+  const [selectedTeamId, setSelectedTeamId] = useState(match.home_team_id || '');
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [cardType, setCardType] = useState('yellow'); // 'yellow' | 'red'
+  const [minute, setMinute] = useState('');
+  const [error, setError] = useState('');
+  const [notification, setNotification] = useState('');
+
+  // Tarjetas registradas en este partido específico
+  const matchCards = (cards || []).filter((c) => c.match_id === match.id);
+
+  const activeTeam = teams.find((t) => t.id === selectedTeamId);
+  const activePlayers = activeTeam?.players || [];
+
+  // Tarjetas del jugador seleccionado en este partido
+  const selectedPlayerMatchCards = matchCards.filter((c) => c.player_id === selectedPlayerId);
+  const selectedPlayerYellows = selectedPlayerMatchCards.filter((c) => c.card_type === 'yellow').length;
+  const selectedPlayerHasRed = selectedPlayerMatchCards.some(
+    (c) => c.card_type === 'red' || c.card_type === 'double_yellow'
+  );
+
+  const handleTeamChange = (newTeamId) => {
+    setSelectedTeamId(newTeamId);
+    setSelectedPlayerId('');
+    setError('');
+    setNotification('');
+  };
+
+  const handleAddCard = (e) => {
+    e.preventDefault();
+    setError('');
+    setNotification('');
+
+    if (!selectedTeamId) {
+      setError('Selecciona el equipo.');
+      return;
+    }
+
+    if (!selectedPlayerId) {
+      setError('Selecciona al jugador infractor.');
+      return;
+    }
+
+    if (selectedPlayerHasRed) {
+      setError('Este jugador ya fue expulsado de este partido.');
+      return;
+    }
+
+    let finalType = cardType;
+    const playerObj = activePlayers.find((p) => p.id === selectedPlayerId);
+    const playerName = playerObj ? `#${playerObj.number} ${playerObj.name}` : 'El jugador';
+
+    // Regla: Si ya tiene 1 amarilla y se le saca otra amarilla -> Doble Amarilla = Expulsión
+    if (cardType === 'yellow' && selectedPlayerYellows >= 1) {
+      finalType = 'double_yellow';
+    }
+
+    const newCard = {
+      id: `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      match_id: match.id,
+      team_id: selectedTeamId,
+      player_id: selectedPlayerId,
+      card_type: finalType,
+      minute: minute ? parseInt(minute, 10) : null,
+      created_at: new Date().toISOString(),
+    };
+
+    onSaveCard(newCard);
+
+    if (finalType === 'double_yellow') {
+      setNotification(`⚠️ ¡DOBLE AMARILLA para ${playerName}! Expulsado del partido y suspendido para la siguiente fecha.`);
+    } else if (finalType === 'red') {
+      setNotification(`🟥 ¡TARJETA ROJA DIRECTA para ${playerName}! Expulsado y suspendido para la siguiente fecha.`);
+    } else {
+      setNotification(`🟨 Tarjeta amarilla registrada para ${playerName}.`);
+    }
+
+    setSelectedPlayerId('');
+    setMinute('');
+  };
+
+  const getPlayerDisplay = (teamId, playerId) => {
+    const t = teams.find((item) => item.id === teamId);
+    const p = t?.players?.find((item) => item.id === playerId);
+    return {
+      teamName: t?.name || 'Equipo',
+      teamLogo: t?.logo || '⚽',
+      playerName: p?.name || 'Jugador',
+      playerNumber: p?.number || '?',
+    };
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+      <div className="relative w-full max-w-xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-800 dark:text-slate-100 transition-colors pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+        
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-5 pr-8">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-2xl shrink-0">
+            <ShieldAlert className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+              Control Disciplinario / Tarjetas
+            </span>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+              {homeTeam?.name || 'Local'} vs {awayTeam?.name || 'Visitante'}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+              {match.round} {match.group ? `• Grupo ${match.group}` : ''}
+            </p>
+          </div>
+        </div>
+
+        {/* Notifications & Warnings */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {notification && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 font-bold animate-fadeIn">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            <span>{notification}</span>
+          </div>
+        )}
+
+        {/* FORM: ASIGNAR NUEVA TARJETA */}
+        <form onSubmit={handleAddCard} className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 space-y-3 mb-6">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <span>➕ Asignar Tarjeta</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Selector de Equipo */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 dark:text-zinc-400 mb-1">
+                Equipo
+              </label>
+              <select
+                value={selectedTeamId}
+                onChange={(e) => handleTeamChange(e.target.value)}
+                className="w-full bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              >
+                {homeTeam && (
+                  <option value={homeTeam.id}>
+                    {homeTeam.logo} {homeTeam.name}
+                  </option>
+                )}
+                {awayTeam && (
+                  <option value={awayTeam.id}>
+                    {awayTeam.logo} {awayTeam.name}
+                  </option>
+                )}
+              </select>
+            </div>
+
+            {/* Selector de Jugador */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 dark:text-zinc-400 mb-1">
+                Jugador
+              </label>
+              <select
+                value={selectedPlayerId}
+                onChange={(e) => setSelectedPlayerId(e.target.value)}
+                className="w-full bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">-- Seleccionar Jugador --</option>
+                {activePlayers.map((p) => {
+                  const pCards = matchCards.filter((c) => c.player_id === p.id);
+                  const yellows = pCards.filter((c) => c.card_type === 'yellow').length;
+                  const hasRed = pCards.some((c) => c.card_type === 'red' || c.card_type === 'double_yellow');
+
+                  let tag = '';
+                  if (hasRed) tag = ' (🚫 Expulsado)';
+                  else if (yellows === 1) tag = ' (🟨 1 amarilla)';
+
+                  return (
+                    <option key={p.id} value={p.id} disabled={hasRed}>
+                      #{p.number} {p.name}{tag}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {/* Advertencia si el jugador seleccionado ya tiene 1 amarilla */}
+          {selectedPlayerYellows === 1 && !selectedPlayerHasRed && (
+            <div className="p-2.5 rounded-xl bg-amber-100/80 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-extrabold flex items-start gap-2">
+              <span className="text-base shrink-0">⚠️</span>
+              <div>
+                <p>Este jugador ya tiene 1 tarjeta amarilla en este partido.</p>
+                <p className="font-medium text-[11px] mt-0.5">
+                  Si le asignas una segunda amarilla, será <strong>EXPULSADO por doble amarilla</strong> y quedará <strong>SUSPENDIDO para el próximo partido</strong> de su equipo.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Tipo de Tarjeta */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setCardType('yellow')}
+              className={`py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                cardType === 'yellow'
+                  ? 'bg-amber-400 text-amber-950 border-amber-500 shadow-md shadow-amber-400/20 scale-[1.02]'
+                  : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:border-amber-400'
+              }`}
+            >
+              <span className="text-sm">🟨</span>
+              <span>Tarjeta Amarilla</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCardType('red')}
+              className={`py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                cardType === 'red'
+                  ? 'bg-red-600 text-white border-red-700 shadow-md shadow-red-600/20 scale-[1.02]'
+                  : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:border-red-500'
+              }`}
+            >
+              <span className="text-sm">🟥</span>
+              <span>Roja Directa</span>
+            </button>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-black font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+          >
+            <span>Confirmar y Asignar Tarjeta</span>
+          </button>
+        </form>
+
+        {/* LISTADO DE TARJETAS REGISTRADAS EN ESTE PARTIDO */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+              Tarjetas en este Partido ({matchCards.length})
+            </h3>
+            <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-medium">
+              Reglamento: 2 amarillas o 1 roja = suspensión próx. fecha
+            </span>
+          </div>
+
+          {matchCards.length === 0 ? (
+            <div className="py-6 text-center rounded-2xl border border-dashed border-slate-200 dark:border-zinc-800">
+              <span className="text-2xl block mb-1">🕊️</span>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                Sin amonestaciones registradas en este partido.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-52 overflow-y-auto no-scrollbar pr-1">
+              {matchCards.map((card) => {
+                const info = getPlayerDisplay(card.team_id, card.player_id);
+                const isDoubleYellow = card.card_type === 'double_yellow';
+                const isRed = card.card_type === 'red';
+
+                return (
+                  <div
+                    key={card.id}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      isRed || isDoubleYellow
+                        ? 'border-red-300 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20'
+                        : 'border-amber-200 dark:border-amber-900/60 bg-amber-50/30 dark:bg-amber-950/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-lg shrink-0">{info.teamLogo}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-mono font-bold text-slate-600 dark:text-zinc-400">
+                            #{info.playerNumber}
+                          </span>
+                          <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                            {info.playerName}
+                          </span>
+                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                            ({info.teamName})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {isDoubleYellow ? (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600 text-white flex items-center gap-1">
+                              <span>🟨🟨 Doble Amarilla (Expulsado • Suspendido próx. fecha)</span>
+                            </span>
+                          ) : isRed ? (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600 text-white flex items-center gap-1">
+                              <span>🟥 Roja Directa (Expulsado • Suspendido próx. fecha)</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-400 text-amber-950 flex items-center gap-1">
+                              <span>🟨 Tarjeta Amarilla</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`¿Deseas eliminar la tarjeta de ${info.playerName}?`)) {
+                          onDeleteCard(card.id);
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+                      title="Eliminar tarjeta"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="pt-4 mt-4 border-t border-slate-100 dark:border-zinc-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-bold transition-all text-center cursor-pointer"
+          >
+            Cerrar
           </button>
         </div>
 
