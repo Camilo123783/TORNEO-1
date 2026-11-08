@@ -26,12 +26,17 @@ export default function Header({
   const [isHolding, setIsHolding] = useState(false);
   const timerRef = useRef(null);
   const isLongPressRef = useRef(false);
+  const touchActiveRef = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
+  const touchStartTime = useRef(0);
 
-  // Iniciar presión en el logo
-  const startHold = (clientX, clientY) => {
+  // Iniciar presión en el logo (pantalla táctil)
+  const handleTouchStart = (e) => {
+    touchActiveRef.current = true;
     isLongPressRef.current = false;
-    touchStartPos.current = { x: clientX, y: clientY };
+    touchStartTime.current = Date.now();
+    const t = e.touches[0];
+    touchStartPos.current = { x: t.clientX, y: t.clientY };
     setIsHolding(true);
 
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -39,39 +44,104 @@ export default function Header({
       isLongPressRef.current = true;
       setIsHolding(false);
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(60); } catch (e) {}
+        try { navigator.vibrate(60); } catch (err) {}
       }
       onOpenLogin();
     }, 1200);
   };
 
-  // Finalizar presión en el logo (toque corto = modo oscuro, presión sostenida = admin)
-  const endHold = (isClick = false) => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    setIsHolding(false);
-
-    if (!isLongPressRef.current && isClick) {
-      if (onToggleDarkMode) {
-        onToggleDarkMode();
-      }
-    }
-    isLongPressRef.current = false;
-  };
-
-  // Si el dedo se desplaza más de 25px (gesto de scroll), cancelar el temporizador
-  const checkMove = (clientX, clientY) => {
-    const dx = Math.abs(clientX - touchStartPos.current.x);
-    const dy = Math.abs(clientY - touchStartPos.current.y);
-    if (dx > 25 || dy > 25) {
+  // Detectar si el usuario está deslizando la pantalla (scroll) para no disparar el admin
+  const handleTouchMove = (e) => {
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - touchStartPos.current.x);
+    const dy = Math.abs(t.clientY - touchStartPos.current.y);
+    if (dx > 20 || dy > 20) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
       setIsHolding(false);
     }
+  };
+
+  // Finalizar toque en logo: si fue toque rápido (<1200ms y no long-press), alternar Modo Oscuro
+  const handleTouchEnd = (e) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsHolding(false);
+
+    if (!isLongPressRef.current) {
+      const elapsed = Date.now() - touchStartTime.current;
+      if (elapsed < 1200) {
+        if (onToggleDarkMode) onToggleDarkMode();
+      }
+    }
+
+    // Prevenir eventos de emulación de mouse que cancelarían el cambio de modo
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    setTimeout(() => {
+      touchActiveRef.current = false;
+    }, 400);
+  };
+
+  const handleTouchCancel = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsHolding(false);
+    isLongPressRef.current = false;
+    setTimeout(() => {
+      touchActiveRef.current = false;
+    }, 400);
+  };
+
+  // Handlers para Desktop con Mouse
+  const handleMouseDown = (e) => {
+    if (touchActiveRef.current) return;
+    if (e.button !== 0) return;
+    isLongPressRef.current = false;
+    touchStartTime.current = Date.now();
+    setIsHolding(true);
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      setIsHolding(false);
+      onOpenLogin();
+    }, 1200);
+  };
+
+  const handleMouseUp = () => {
+    if (touchActiveRef.current) return;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsHolding(false);
+
+    if (!isLongPressRef.current) {
+      const elapsed = Date.now() - touchStartTime.current;
+      if (elapsed < 1200) {
+        if (onToggleDarkMode) onToggleDarkMode();
+      }
+    }
+    isLongPressRef.current = false;
+  };
+
+  const handleMouseLeave = () => {
+    if (touchActiveRef.current) return;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsHolding(false);
+    isLongPressRef.current = false;
   };
 
   // Atajo de teclado de emergencia: Ctrl + Shift + A
@@ -99,23 +169,15 @@ export default function Header({
           
           {/* Logo & Title */}
           <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-            {/* Tournament Logo: 1 toque = Modo Oscuro | Mantener presionado = Acceso Secreto Admin */}
+            {/* Tournament Logo: 1 toque = Modo Oscuro | Mantener presionado (1.2s) = Acceso Admin */}
             <div
-              onTouchStart={(e) => {
-                const t = e.touches[0];
-                startHold(t.clientX, t.clientY);
-              }}
-              onTouchMove={(e) => {
-                const t = e.touches[0];
-                checkMove(t.clientX, t.clientY);
-              }}
-              onTouchEnd={() => endHold(true)}
-              onTouchCancel={() => endHold(false)}
-              onMouseDown={(e) => {
-                if (e.button === 0) startHold(e.clientX, e.clientY);
-              }}
-              onMouseUp={() => endHold(true)}
-              onMouseLeave={() => endHold(false)}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchCancel}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -170,8 +232,28 @@ export default function Header({
             </div>
           </div>
 
-          {/* Right section: Instant Refresh Button & Admin state */}
+          {/* Right section: Modo Oscuro/Claro + Actualizar + Logout */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Botón directo de Modo Claro / Modo Oscuro */}
+            <button
+              type="button"
+              onClick={onToggleDarkMode}
+              title={isDarkMode ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-xl transition-all border cursor-pointer shadow-2xs text-slate-700 dark:text-zinc-200 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border-slate-200 dark:border-zinc-800 active:scale-95 shrink-0"
+            >
+              {isDarkMode ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="hidden xs:inline">Claro</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-slate-700 dark:text-zinc-300 shrink-0" />
+                  <span className="hidden xs:inline">Oscuro</span>
+                </>
+              )}
+            </button>
+
             {/* Quick Refresh Button */}
             <button
               onClick={onRefresh}
